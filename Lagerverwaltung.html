@@ -512,64 +512,74 @@ const MOVEMENT_TYPES = {
 
 /* =========================================================================
    PARSER (Rechnungs-Text → strukturierte Daten)
+   Unterstützt: Bandyshirt, MEWA
    ========================================================================= */
-function parseInvoiceText(text) {
-  const lines = text.split(/\r?\n/).map(l => l.trim());
-  const result = {
-    supplierName: null,
-    invoiceNo: null,
-    invoiceDate: null,
-    items: []
-  };
+function detectInvoiceFormat(text) {
+  if (/mewa\s+ag/i.test(text) || /artikelnr\.?\s+bezeichnung\s+menge/i.test(text)) return 'mewa';
+  if (/pos\s+artikel\s+preis\s+menge/i.test(text)) return 'bandyshirt';
+  return 'auto';
+}
 
-  // Rechnungsnummer
+function parseInvoiceMeta(lines) {
+  const meta = { supplierName: null, invoiceNo: null, invoiceDate: null };
   for (const line of lines) {
-    const m = line.match(/Rechnung[s]?[\s-]?(?:Nr\.?|#)\s*:?\s*([A-Z0-9_-]+)/i);
-    if (m) { result.invoiceNo = m[1]; break; }
+    const m = line.match(/Rechnung(?:s)?[\s-]?(?:nummer|Nr\.?|#)\s*:?\s*([A-Z0-9_-]+)/i);
+    if (m) { meta.invoiceNo = m[1]; break; }
   }
-
-  // Datum
   for (const line of lines) {
     const m = line.match(/Rechnungsdatum\s*:?\s*(\d{2}\.\d{2}\.\d{4})/i);
     if (m) {
-      const [d,mo,y] = m[1].split('.');
-      result.invoiceDate = `${y}-${mo}-${d}`;
+      const [d, mo, y] = m[1].split('.');
+      meta.invoiceDate = `${y}-${mo}-${d}`;
       break;
     }
   }
-
-  // Lieferant: erste Zeile mit Firmenform-Kürzel oder Logo-Linie
-  for (const line of lines.slice(0, 40)) {
-    if (!line) continue;
-    if (/(?:GmbH|AG|KG|OHG|GbR|UG|e\.K\.|e\.V\.)\b/.test(line)) {
-      result.supplierName = line.split('|')[0].trim();
-      break;
+  const head = lines.slice(0, 50);
+  const headText = head.join('\n');
+  if (/mewa/i.test(headText)) {
+    const m = head.find(l => /mewa\s+ag/i.test(l));
+    if (m) meta.supplierName = m.trim();
+  } else if (/bandyshirt/i.test(headText)) {
+    const m = head.find(l => /bandyshirt/i.test(l));
+    if (m) meta.supplierName = m.split('|')[0].trim();
+  }
+  if (!meta.supplierName) {
+    for (const line of head) {
+      if (!line) continue;
+      if (/(?:GmbH|AG|KG|OHG|GbR|UG|e\.K\.|e\.V\.)\b/.test(line)) {
+        meta.supplierName = line.split('|')[0].trim();
+        break;
+      }
     }
   }
+  return meta;
+}
 
-  // Positionsblock
+function parseAttributeLine(line, current) {
+  const attr = line.match(/^(Farbe|Color|Größe|Groesse|Size|Material|Art\.-Nr\.?)\s*:\s*(.+)$/i);
+  if (!attr || !current) return;
+  const k = attr[1].toLowerCase();
+  const v = attr[2].trim();
+  if (k.startsWith('farbe') || k === 'color') current.rawVariant = v;
+  else if (k.startsWith('größe') || k.startsWith('groesse') || k === 'size') current.rawSize = v;
+}
+
+function parseBandyshirtInvoice(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim());
+  const result = { ...parseInvoiceMeta(lines), items: [], format: 'bandyshirt' };
   let inTable = false;
   let current = null;
   const flush = () => { if (current) result.items.push(current); current = null; };
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
+  for (const line of lines) {
     if (!inTable) {
-      // Tabellenkopf erkennen
-      if (/Pos.*Artikel.*(?:Preis|Einzelpreis).*Menge/i.test(line)) {
-        inTable = true;
-      }
+      if (/Pos.*Artikel.*(?:Preis|Einzelpreis).*Menge/i.test(line)) inTable = true;
       continue;
     }
-
-    // Ende der Tabelle
     if (/Zwischensumme.*brutto|^Nettobetrag|^Gesamtsumme|^Versand\s*\/\s*Bearbeitung/i.test(line)) {
       flush();
       break;
     }
-
-    // Hauptzeile: Pos Label Preis Menge MwSt% Summe
     const main = line.match(/^(\d+)\s+(.+?)\s+([\d.,]+)\s*€\s+(\d+)\s+([\d.,]+)\s*%\s+([\d.,]+)\s*€\s*$/);
     if (main) {
       flush();
@@ -585,27 +595,72 @@ function parseInvoiceText(text) {
       };
       continue;
     }
-
-    // Attributzeile
-    if (current) {
-      const attr = line.match(/^(Farbe|Color|Größe|Groesse|Size|Material|Art\.-Nr\.?)\s*:\s*(.+)$/i);
-      if (attr) {
-        const k = attr[1].toLowerCase();
-        const v = attr[2].trim();
-        if (k.startsWith('farbe') || k === 'color') current.rawVariant = v;
-        else if (k.startsWith('größe') || k.startsWith('groesse') || k === 'size') current.rawSize = v;
-      }
-    }
+    parseAttributeLine(line, current);
   }
   flush();
-
   return result;
+}
+
+function parseMewaInvoice(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim());
+  const result = { ...parseInvoiceMeta(lines), items: [], format: 'mewa' };
+  if (!result.supplierName) result.supplierName = 'MEWA AG';
+  let inTable = false;
+  let current = null;
+  const flush = () => { if (current) result.items.push(current); current = null; };
+
+  for (const line of lines) {
+    if (!inTable) {
+      if (/pos\.?\s+artikelnr\.?\s+bezeichnung/i.test(line) || /artikelnr\.?\s+bezeichnung\s+menge/i.test(line)) {
+        inTable = true;
+      }
+      continue;
+    }
+    if (/^nettobetrag|^gesamtbetrag|^summe\s+netto|^mwst|^ust|^zahlungsziel/i.test(line)) {
+      flush();
+      break;
+    }
+    const main = line.match(/^(\d+)\s+(\d{4,})\s+(.+?)\s+(\d+)\s+([\d.,]+)\s*€\s+([\d.,]+)\s*€\s*$/);
+    if (main) {
+      flush();
+      current = {
+        pos: parseInt(main[1]),
+        rawLabel: `${main[2]} ${main[3].trim()}`,
+        supplierSku: main[2],
+        unitPrice: toCents(parseGermanNumber(main[5])),
+        quantity: parseInt(main[4]),
+        totalPrice: toCents(parseGermanNumber(main[6])),
+        rawSize: null,
+        rawVariant: null
+      };
+      continue;
+    }
+    parseAttributeLine(line, current);
+  }
+  flush();
+  return result;
+}
+
+function parseInvoiceText(text) {
+  const format = detectInvoiceFormat(text);
+  if (format === 'mewa') return parseMewaInvoice(text);
+  const bandy = parseBandyshirtInvoice(text);
+  if (bandy.items.length > 0) return bandy;
+  const mewa = parseMewaInvoice(text);
+  if (mewa.items.length > 0) return mewa;
+  return bandy;
+}
+
+function findExistingImport(invoiceNo) {
+  if (!invoiceNo) return null;
+  const norm = invoiceNo.trim().toLowerCase();
+  return state.imports.find(i => (i.invoiceNo || '').trim().toLowerCase() === norm) || null;
 }
 
 /* SKU-Suche im Label (z. B. #E190, ABC-123) */
 function extractSku(label) {
   if (!label) return null;
-  const m = label.match(/(#[A-Z0-9]+|[A-Z]{2,}-?\d+|\b[A-Z]\d{3,}\b)/);
+  const m = label.match(/(#[A-Z0-9]+|[A-Z]{2,}-?\d+|\b[A-Z]\d{3,}\b|\b\d{4,}\b)/);
   return m ? m[1] : null;
 }
 
@@ -675,12 +730,21 @@ const ROLE_LABELS = {
   viewer: 'Betrachter'
 };
 
+function movementStockDelta(m) {
+  if (m.type === 'defekt') return 0;
+  if (['eingang', 'ausgabe', 'rueckgabe', 'korrektur'].includes(m.type)) return m.quantity;
+  return 0;
+}
+
 function validateImportedState(obj) {
   if (!obj || typeof obj !== 'object') return 'JSON enthält kein Objekt.';
   const requiredArrays = ['suppliers','articles','aliases','employees','imports','importLines','movements','assignments'];
   for (const key of requiredArrays) {
     if (!Array.isArray(obj[key])) return `Pflichtbereich "${key}" fehlt oder ist keine Liste.`;
   }
+  if (obj.auditLog !== undefined && !Array.isArray(obj.auditLog)) return 'auditLog muss eine Liste sein.';
+  if (!obj.meta || typeof obj.meta !== 'object') return 'meta fehlt.';
+  if (!Number.isInteger(obj.meta.nextId) || obj.meta.nextId < 1) return 'meta.nextId ungültig.';
   const seenIds = new Set();
   for (const key of requiredArrays) {
     for (const row of obj[key]) {
@@ -693,9 +757,22 @@ function validateImportedState(obj) {
   }
   const articleIds = new Set(obj.articles.map(a => a.id));
   const employeeIds = new Set(obj.employees.map(e => e.id));
+  const importIds = new Set(obj.imports.map(i => i.id));
   for (const m of obj.movements) {
     if (!articleIds.has(m.articleId)) return `Bewegung ${m.id} verweist auf unbekannten Artikel.`;
     if (m.employeeId && !employeeIds.has(m.employeeId)) return `Bewegung ${m.id} verweist auf unbekannten Mitarbeiter.`;
+  }
+  for (const l of obj.importLines) {
+    if (!importIds.has(l.importId)) return `Import-Zeile ${l.id} verweist auf unbekannten Import.`;
+  }
+  for (const art of obj.articles) {
+    const fromMovements = obj.movements
+      .filter(m => m.articleId === art.id)
+      .reduce((sum, m) => sum + movementStockDelta(m), 0);
+    if (fromMovements !== (art.stock || 0)) {
+      const name = art.internalName || `ID ${art.id}`;
+      return `Bestand „${name}" (${art.stock}) weicht von Bewegungen ab (${fromMovements}).`;
+    }
   }
   return null;
 }
@@ -722,6 +799,7 @@ const ROUTES = {
   'imports': renderImportList,
   'review': renderImportReview,
   'manual-receipt': renderManualReceipt,
+  'correction': renderCorrection,
   'issue': renderIssue,
   'history': renderHistory,
   'employees': renderEmployees,
@@ -740,6 +818,7 @@ const PAGE_TITLES = {
   'imports': 'Import: Prüfqueue',
   'review': 'Import prüfen',
   'manual-receipt': 'Manueller Wareneingang',
+  'correction': 'Bestandskorrektur',
   'issue': 'Neue Ausgabe',
   'history': 'Bewegungshistorie',
   'employees': 'Mitarbeiter',
@@ -823,6 +902,7 @@ function renderMenu() {
       { href: 'import',         label: 'Import',             ico: ICO.upload },
       { href: 'imports',        label: 'Prüfqueue',          ico: ICO.inbox,   badge: pendingImports > 0 ? pendingImports : null },
       { href: 'manual-receipt', label: 'Manueller Eingang',  ico: ICO.plus },
+      { href: 'correction',     label: 'Bestandskorrektur',  ico: ICO.plus },
     ]},
     { group: 'Ausgabe', items: [
       { href: 'issue',          label: 'Neue Ausgabe',       ico: ICO.arrow },
@@ -1053,7 +1133,7 @@ function renderInventory() {
 function renderImport() {
   const v = $('#view');
   v.innerHTML = `
-    <p class="lead">Lade eine Rechnung als <code>.txt</code>-Datei hoch oder kopiere den Text aus der Rechnung in das Feld unten. Das System erkennt Lieferant, Rechnungsnummer und Positionen, ordnet bekannte Artikel automatisch zu und markiert unklare Zeilen zur Prüfung. <strong>Es wird nichts gebucht, bevor du bestätigst.</strong></p>
+    <p class="lead">Lade eine Rechnung als <code>.txt</code>-Datei hoch oder kopiere den Text aus der Rechnung in das Feld unten. Unterstützt <strong>Bandyshirt</strong> und <strong>MEWA</strong>. Das System erkennt Lieferant, Rechnungsnummer und Positionen, ordnet bekannte Artikel automatisch zu und markiert unklare Zeilen zur Prüfung. <strong>Es wird nichts gebucht, bevor du bestätigst.</strong></p>
 
     <div class="card">
       <div class="grid-2">
@@ -1063,8 +1143,11 @@ function renderImport() {
           <div class="help">Aus PDF: Text per "Markieren &amp; Kopieren" oder „Datei → Speichern als TXT" extrahieren.</div>
         </div>
         <div>
-          <label>Oder Beispiel laden</label>
-          <button class="sec" onclick="loadSampleInvoice()">Bandyshirt-Rechnung einfügen</button>
+          <label>Beispiel laden</label>
+          <div class="actions" style="margin-top:6px;">
+            <button class="sec" onclick="loadSampleInvoice('bandyshirt')">Bandyshirt</button>
+            <button class="sec" onclick="loadSampleInvoice('mewa')">MEWA</button>
+          </div>
         </div>
       </div>
       <hr class="sep">
@@ -1086,7 +1169,35 @@ function renderImport() {
   };
 }
 
-function loadSampleInvoice() {
+function loadSampleInvoice(format='bandyshirt') {
+  if (format === 'mewa') {
+    $('#invoiceText').value = `MEWA AG
+Hermann-Gebauer-Str. 1
+65232 Taunusstein
+
+Rechnungsnummer: 9876543210
+Rechnungsdatum: 15.03.2026
+
+P&P Buntmetallhandel
+Marcin Panus
+Bamberger Str. 3
+40599 Düsseldorf
+
+Pos. Artikelnr. Bezeichnung Menge Einzelpreis Gesamt
+1 345201 Arbeitshemd Plus blau 10 4,56 € 45,60 €
+Größe: 52
+Farbe: blau
+2 345301 Arbeitshose Plus anthrazit 10 8,90 € 89,00 €
+Größe: 52
+Farbe: anthrazit
+3 345401 Sicherheitsschuh S3 4 24,50 € 98,00 €
+Größe: 43
+Farbe: schwarz
+Nettobetrag: 232,60 €
+zzgl. 19% MwSt. 44,19 €
+Gesamtbetrag: 276,79 €`;
+    return;
+  }
   $('#invoiceText').value = `Rechnungs-Nr.:
 Rechnung #: BSi042600160397
 Rechnungsdatum: 30.04.2026
@@ -1124,8 +1235,16 @@ function parseAndCreateImport() {
   if (!text || text.trim().length < 20) { toast('Bitte Rechnungstext einfügen.', 'error'); return; }
   const parsed = parseInvoiceText(text);
   if (parsed.items.length === 0) {
-    toast('Keine Positionen erkannt. Bitte Tabellenkopf prüfen.', 'error');
+    toast('Keine Positionen erkannt. Bitte Tabellenkopf prüfen (Bandyshirt oder MEWA).', 'error');
     return;
+  }
+  if (parsed.invoiceNo) {
+    const existing = findExistingImport(parsed.invoiceNo);
+    if (existing) {
+      toast(`Rechnung ${parsed.invoiceNo} existiert bereits (${existing.status}).`, 'error');
+      navigate('review/' + existing.id);
+      return;
+    }
   }
   // Lieferant zuordnen oder behalten
   let supplierId = null;
@@ -1166,7 +1285,8 @@ function parseAndCreateImport() {
     });
   });
   persist();
-  toast(`Import angelegt mit ${parsed.items.length} Positionen.`, 'success');
+  const fmt = parsed.format ? ` (${parsed.format})` : '';
+  toast(`Import angelegt mit ${parsed.items.length} Positionen${fmt}.`, 'success');
   navigate('review/' + importId);
 }
 
@@ -1292,6 +1412,7 @@ function renderImportReview(idStr) {
                   </td>
                   <td>
                     <div class="actions">
+                      ${line.matchStatus === 'suggest' ? `<button class="small" onclick="confirmSuggestLine(${line.id})">Vorschlag bestätigen</button>` : ''}
                       <button class="sec small" onclick="assignArticleToLine(${line.id})">Zuordnen</button>
                       <button class="sec small" onclick="newArticleFromLine(${line.id})">Neu anlegen</button>
                     </div>
@@ -1308,7 +1429,7 @@ function renderImportReview(idStr) {
         <button onclick="confirmImport(${imp.id})">Wareneingang buchen</button>
       </div>
       <div class="help" style="margin-top:6px;">
-        Beim Buchen werden Bestände erhöht, der letzte Einkaufspreis aktualisiert und manuelle Zuordnungen als Aliase gelernt.
+        Gelbe Vorschläge müssen mit „Vorschlag bestätigen" freigegeben werden. Beim Buchen werden Bestände erhöht, der letzte Einkaufspreis aktualisiert und manuelle Zuordnungen als Aliase gelernt.
       </div>
     </div>
   `;
@@ -1323,6 +1444,16 @@ function adoptSupplier(importId) {
   persist();
   toast('Lieferant angelegt.', 'success');
   navigate('review/' + importId);
+}
+
+function confirmSuggestLine(lineId) {
+  const line = state.importLines.find(l => l.id === lineId);
+  if (!line || line.matchStatus !== 'suggest') return;
+  line.matchStatus = 'manual';
+  line.note = ((line.note || '') + ' · Vorschlag bestätigt').trim();
+  persist();
+  toast('Vorschlag bestätigt.', 'success');
+  navigate('review/' + line.importId);
 }
 
 async function assignArticleToLine(lineId) {
@@ -1404,7 +1535,7 @@ function newArticleFromLine(lineId) {
       minStock: parseInt(div.querySelector('#imin').value) || 0,
       location: div.querySelector('#iloc').value.trim() || null,
       lastPurchasePrice: null,
-      personalAssignment: !!(catInfo(cat) || {}).personal,
+      personalAssignment: !!catInfo(cat).personal,
       active: true
     };
     state.articles.push(article);
@@ -1422,10 +1553,23 @@ async function confirmImport(importId) {
   if (!requirePermission('import', 'Nur Office & Admin dürfen Importe bestätigen.')) return;
   const imp = state.imports.find(i => i.id === importId);
   if (!imp) return;
+  if (imp.status === 'confirmed') {
+    toast('Import wurde bereits gebucht.', 'error');
+    return;
+  }
+  if (imp.status === 'cancelled') {
+    toast('Import wurde verworfen.', 'error');
+    return;
+  }
   const lines = state.importLines.filter(l => l.importId === importId);
   const unresolved = lines.filter(l => !l.matchedArticleId);
   if (unresolved.length > 0) {
     toast(`${unresolved.length} Position(en) noch nicht zugeordnet.`, 'error');
+    return;
+  }
+  const unconfirmedSuggest = lines.filter(l => l.matchStatus === 'suggest');
+  if (unconfirmedSuggest.length > 0) {
+    toast(`${unconfirmedSuggest.length} Vorschlag/Vorschläge müssen erst bestätigt werden.`, 'error');
     return;
   }
   if (!await confirmDialog(`${lines.length} Position(en) buchen und Bestände erhöhen?`)) return;
@@ -1551,6 +1695,83 @@ function bookManualReceipt() {
   audit('MANUAL_RECEIPT', 'article', aid, {stock: art.stock - qty}, {stock: art.stock, qty, date});
   persist();
   toast('Wareneingang gebucht.', 'success');
+  navigate('inventory');
+}
+
+/* ---------- Bestandskorrektur ---------- */
+function renderCorrection() {
+  const v = $('#view');
+  v.innerHTML = `
+    <p class="lead">Bestand manuell korrigieren (Inventur, Zählfehler). Positive Zahl erhöht, negative verringert den Bestand. Begründung ist Pflicht.</p>
+    <div class="card">
+      <div class="grid-2">
+        <div class="field">
+          <label>Artikel</label>
+          <select id="kArt"></select>
+        </div>
+        <div class="field">
+          <label>Korrektur (+/− Stück)</label>
+          <input id="kDelta" type="number" value="0" placeholder="z. B. -2 oder +5">
+        </div>
+        <div class="field">
+          <label>Datum</label>
+          <input id="kDate" type="date" value="${todayISO()}">
+        </div>
+        <div class="field">
+          <label>Aktueller Bestand</label>
+          <input id="kStock" type="text" readonly>
+        </div>
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Begründung</label>
+          <input id="kNote" placeholder="z. B. Inventur 2026, Zählfehler Regal B2">
+        </div>
+      </div>
+      <div class="actions">
+        <button onclick="bookCorrection()">Korrektur buchen</button>
+      </div>
+    </div>
+  `;
+  const artSel = $('#kArt');
+  artSel.innerHTML = state.articles.filter(a => a.active !== false)
+    .sort((a,b) => a.internalName.localeCompare(b.internalName))
+    .map(a => `<option value="${a.id}">${escapeHtml(a.internalName)}${a.size?' · '+a.size:''}${a.variant?' · '+a.variant:''} (${a.stock})</option>`).join('') || '<option>— erst Artikel anlegen —</option>';
+  const refreshStock = () => {
+    const a = state.articles.find(x => x.id === parseInt(artSel.value));
+    $('#kStock').value = a ? `${a.stock} ${a.unit || ''}` : '';
+  };
+  artSel.onchange = refreshStock;
+  refreshStock();
+}
+
+async function bookCorrection() {
+  if (!requirePermission('stock', 'Nur Lager & Admin dürfen Korrekturen buchen.')) return;
+  const aid = parseInt($('#kArt').value);
+  const delta = parseInt($('#kDelta').value, 10);
+  const date = $('#kDate').value || todayISO();
+  const note = $('#kNote').value.trim();
+  if (!aid || !Number.isFinite(delta) || delta === 0) { toast('Artikel und Korrekturmenge (≠ 0) angeben.', 'error'); return; }
+  if (!note) { toast('Bitte Begründung angeben.', 'error'); return; }
+  const art = state.articles.find(a => a.id === aid);
+  if (!art) return;
+  if (delta < 0 && art.stock + delta < 0) {
+    if (!await confirmDialog(`Bestand würde negativ (${art.stock + delta}). Trotzdem buchen?`)) return;
+  }
+  const before = art.stock;
+  art.stock += delta;
+  state.movements.push({
+    id: nextId(),
+    articleId: aid,
+    type: 'korrektur',
+    quantity: delta,
+    employeeId: null,
+    importLineId: null,
+    unitPrice: art.lastPurchasePrice,
+    note: note,
+    occurredAt: date
+  });
+  audit('STOCK_CORRECTION', 'article', aid, { stock: before }, { stock: art.stock, delta, note });
+  persist();
+  toast('Korrektur gebucht.', 'success');
   navigate('inventory');
 }
 
@@ -2186,7 +2407,7 @@ function renderDataView() {
     </div>
     <div class="card" style="margin-top:14px;">
       <h2>Backup &amp; Import</h2>
-      <p class="lead">Alle Daten werden im Browser-Speicher gehalten. Für ein Backup als JSON exportieren und sicher ablegen (z. B. ins Lagerbestand-Verzeichnis).</p>
+      <p class="lead">Alle Daten werden im Browser-Speicher gehalten. Für ein Backup als JSON exportieren und sicher ablegen — oder <code>npm run backup:data:full</code> im Projektordner (kopiert den neuesten Export nach Projekt-Backups).</p>
       <div class="actions">
         <button onclick="exportData()">Export als JSON</button>
         <button class="sec" onclick="document.getElementById('importJson').click()">JSON importieren</button>
@@ -2219,8 +2440,15 @@ async function importData(input) {
   r.onload = () => {
     try {
       const obj = JSON.parse(r.result);
-      state = obj; persist(); handleRoute();
-      toast('Daten importiert.', 'success');
+      const err = validateImportedState(obj);
+      if (err) {
+        toast('Import abgelehnt: ' + err, 'error');
+        return;
+      }
+      state = migrateData(obj);
+      audit('DATA_IMPORT', 'system', null, null, { movements: state.movements.length, articles: state.articles.length });
+      persist(); handleRoute();
+      toast('Daten importiert und geprüft.', 'success');
     } catch (e) {
       toast('Ungültige Datei.', 'error');
     }

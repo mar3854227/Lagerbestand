@@ -1,0 +1,11 @@
+{
+  "name": "lagerverwaltung",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "export:data": "node scripts/export-json-from-html.mjs",
+    "backup:data": "./scripts/backup-json-from-downloads.sh",
+    "backup:data:full": "npm run export:data && npm run backup:data",
+    "backup:central": "./scripts/backup-to-documents.sh"
+  }
+}
