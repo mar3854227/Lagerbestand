@@ -1,0 +1,4 @@
+.playwright-cli/
+tmp/
+*.log
+.DS_Store

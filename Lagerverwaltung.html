@@ -1,0 +1,2398 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lagerverwaltung</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232563eb'/%3E%3Cpath d='M16 22 32 13l16 9v20l-16 9-16-9z' fill='none' stroke='white' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M16 22l16 9 16-9M32 31v20' fill='none' stroke='white' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px; color: #111827; background: #f1f5f9;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  aside.sidebar {
+    background: #0f172a;
+    padding: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    margin-bottom: 8px;
+  }
+  .brand-icon {
+    width: 34px; height: 34px; flex-shrink: 0;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; line-height: 1;
+  }
+  .brand-name { font-weight: 700; font-size: 14px; color: #f1f5f9; line-height: 1.2; }
+  .brand-sub  { font-size: 11px; color: #64748b; margin-top: 1px; }
+
+  nav.menu { padding: 0 8px; flex: 1; }
+  nav.menu .group { margin-bottom: 2px; }
+  nav.menu .group-title {
+    font-size: 10px; text-transform: uppercase; color: #475569;
+    padding: 14px 10px 4px; letter-spacing: .08em; font-weight: 600;
+  }
+  nav.menu a {
+    display: flex; align-items: center; gap: 8px; justify-content: space-between;
+    padding: 7px 10px; border-radius: 6px;
+    color: #94a3b8; text-decoration: none; font-size: 13px;
+    cursor: pointer; user-select: none; transition: background .12s, color .12s;
+  }
+  nav.menu a .mlink { display: flex; align-items: center; gap: 8px; }
+  nav.menu a .mico { opacity: .7; display: flex; align-items: center; }
+  nav.menu a:hover { background: rgba(255,255,255,.06); color: #e2e8f0; }
+  nav.menu a:hover .mico { opacity: 1; }
+  nav.menu a.active { background: rgba(59,130,246,.18); color: #93c5fd; font-weight: 600; }
+  nav.menu a.active .mico { opacity: 1; color: #60a5fa; }
+  nav.menu .badge {
+    background: #dc2626; color: #fff; font-size: 10px;
+    padding: 1px 6px; border-radius: 10px; font-weight: 700; margin-left: auto;
+  }
+  .sidebar-footer {
+    padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.07);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sidebar-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .sidebar-user { font-size: 12px; color: #64748b; }
+
+  /* ── Main ── */
+  main.main { padding: 0; min-width: 0; }
+  .topbar {
+    background: #fff; border-bottom: 1px solid #e2e8f0;
+    padding: 0 24px; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .topbar h1 { font-size: 15px; font-weight: 600; color: #0f172a; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .topbar .crumbs { color: #94a3b8; font-size: 12px; }
+  .topbar-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    color: #fff; font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: default;
+  }
+  .container { padding: 22px 24px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+
+  /* ── Cards ── */
+  .card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 18px;
+  }
+  .card h2 { font-size: 13px; font-weight: 700; margin-bottom: 12px; color: #0f172a; text-transform: uppercase; letter-spacing: .04em; }
+
+  /* ── KPI Grid ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .kpi {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 16px 18px; display: flex; gap: 14px; align-items: center;
+  }
+  .kpi-icon {
+    width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+  }
+  .kpi-icon.blue   { background: #eff6ff; }
+  .kpi-icon.green  { background: #f0fdf4; }
+  .kpi-icon.yellow { background: #fffbeb; }
+  .kpi-icon.red    { background: #fef2f2; }
+  .kpi-body { min-width: 0; }
+  .kpi-label { font-size: 11px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .kpi-val   { font-size: 28px; font-weight: 700; line-height: 1.1; margin-top: 2px; color: #0f172a; }
+  .kpi-val.red    { color: #dc2626; }
+  .kpi-val.yellow { color: #d97706; }
+  .kpi-val.green  { color: #16a34a; }
+  .kpi-hint  { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+  /* Legacy stat (kept for compatibility) */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+  .stat .label { font-size: 12px; color: #6b7280; }
+  .stat .value { font-size: 26px; font-weight: 600; margin-top: 4px; }
+  .stat.warn   { border-left: 3px solid #d97706; }
+  .stat.danger { border-left: 3px solid #dc2626; }
+  .stat.ok     { border-left: 3px solid #16a34a; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  th { font-weight: 600; color: #475569; background: #f8fafc; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fafc; }
+  tr.row-danger td { background: #fff5f5 !important; }
+  tr.row-warn td   { background: #fffbeb !important; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ── Pills ── */
+  .pill {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; padding: 2px 9px; border-radius: 12px; font-weight: 600;
+  }
+  .pill.green  { background: #dcfce7; color: #166534; }
+  .pill.yellow { background: #fef9c3; color: #854d0e; }
+  .pill.red    { background: #fee2e2; color: #991b1b; }
+  .pill.gray   { background: #f1f5f9; color: #475569; }
+  .pill.blue   { background: #dbeafe; color: #1e40af; }
+
+  /* ── Buttons ── */
+  button, .btn {
+    background: #2563eb; color: #fff; border: 0;
+    padding: 8px 14px; border-radius: 7px; cursor: pointer;
+    font-size: 13px; font-weight: 500; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 5px; transition: background .12s;
+  }
+  button:hover, .btn:hover { background: #1d4ed8; }
+  button.sec, .btn.sec { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+  button.sec:hover, .btn.sec:hover { background: #f9fafb; }
+  button.ghost { background: transparent; color: #2563eb; padding: 4px 8px; }
+  button.ghost:hover { background: #eff6ff; }
+  button.danger { background: #dc2626; }
+  button.danger:hover { background: #b91c1c; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── Forms ── */
+  input, select, textarea {
+    width: 100%; padding: 8px 10px;
+    border: 1px solid #d1d5db; border-radius: 7px;
+    font-family: inherit; font-size: 13.5px; background: #fff; color: #111827;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid #bfdbfe; outline-offset: -1px; border-color: #3b82f6;
+  }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; font-weight: 600; }
+  .field { margin-bottom: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+  /* ── Layout helpers ── */
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar .spacer { flex: 1; }
+  .empty {
+    text-align: center; padding: 48px 20px; color: #94a3b8;
+    font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .empty-ico { font-size: 36px; line-height: 1; }
+  .actions { display: flex; gap: 6px; }
+  hr.sep { border: 0; border-top: 1px solid #e2e8f0; margin: 14px 0; }
+
+  /* ── Modal ── */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(15,23,42,.5);
+    display: flex; align-items: flex-start; justify-content: center;
+    z-index: 100; padding: 60px 20px 20px; backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: #fff; border-radius: 12px; max-width: 560px; width: 100%;
+    box-shadow: 0 20px 40px rgba(0,0,0,.18); overflow: hidden;
+  }
+  .modal-head { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; font-weight: 700; font-size: 15px; }
+  .modal-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px; background: #f8fafc; }
+
+  /* ── Toast ── */
+  #toast-root { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: #0f172a; color: #e2e8f0; padding: 11px 16px; border-radius: 8px;
+    font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    animation: slideUp .22s ease-out; min-width: 220px;
+  }
+  .toast.success { background: #14532d; border-left: 3px solid #22c55e; }
+  .toast.error   { background: #7f1d1d; border-left: 3px solid #ef4444; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Misc ── */
+  .ampel { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .ampel.g { background: #16a34a; }
+  .ampel.y { background: #d97706; }
+  .ampel.r { background: #dc2626; }
+  .lead { color: #6b7280; font-size: 13px; margin-bottom: 14px; line-height: 1.6; }
+  .help { font-size: 12px; color: #6b7280; margin-top: 4px; line-height: 1.5; }
+  .scroll-x { overflow-x: auto; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">📦</div>
+      <div>
+        <div class="brand-name">Lagerverwaltung</div>
+        <div class="brand-sub">Arbeitskleidung &amp; PSA</div>
+      </div>
+    </div>
+    <nav class="menu" id="menu"></nav>
+    <div class="sidebar-footer" onclick="openUserSettings()" title="Rolle / Name ändern" style="cursor:pointer;">
+      <div class="sidebar-avatar" id="sidebar-avatar">M</div>
+      <div style="flex:1; min-width:0;">
+        <div class="sidebar-user" id="sidebar-user">Angemeldet</div>
+        <div class="sidebar-role" id="sidebar-role"></div>
+      </div>
+      <span style="color:#64748b; font-size:14px; flex-shrink:0;">⚙</span>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h1 id="page-title">Dashboard</h1>
+      <div class="topbar-right">
+        <div class="crumbs" id="crumbs"></div>
+        <div class="topbar-avatar" title="Marcin Panus">M</div>
+      </div>
+    </div>
+    <div class="container" id="view"></div>
+  </main>
+</div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+/* =========================================================================
+   STORAGE
+   ========================================================================= */
+const STORAGE_KEY = 'lagerverwaltung_v1';
+
+const defaultData = () => ({
+  suppliers: [],
+  articles: [],
+  aliases: [],
+  employees: [],
+  imports: [],
+  importLines: [],
+  movements: [],
+  assignments: [],
+  auditLog: [],
+  meta: {
+    nextId: 1,
+    version: 1,
+    users: [{ id: 1, name: 'Marcin Panus', role: 'admin' }],
+    currentUser: { id: 1, name: 'Marcin Panus', role: 'admin' }
+  }
+});
+
+const ROLE_PERMISSIONS = {
+  admin: ['admin', 'write', 'stock', 'import', 'export'],
+  office: ['write', 'stock', 'import', 'export'],
+  warehouse: ['stock'],
+  viewer: []
+};
+
+function migrateData(data) {
+  const def = defaultData();
+  for (const k of Object.keys(def)) if (data[k] === undefined) data[k] = def[k];
+  data.meta = { ...def.meta, ...(data.meta || {}) };
+  if (!Array.isArray(data.meta.users)) data.meta.users = def.meta.users;
+  if (!data.meta.currentUser) data.meta.currentUser = data.meta.users[0] || def.meta.currentUser;
+  if (!Array.isArray(data.auditLog)) data.auditLog = [];
+  if (!Number.isInteger(data.meta.nextId) || data.meta.nextId < 1) {
+    const ids = ['suppliers','articles','aliases','employees','imports','importLines','movements','assignments','auditLog']
+      .flatMap(k => Array.isArray(data[k]) ? data[k].map(x => x.id || 0) : []);
+    data.meta.nextId = Math.max(0, ...ids) + 1;
+  }
+  data.meta.version = 2;
+  return data;
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultData();
+    const data = JSON.parse(raw);
+    return migrateData(data);
+  } catch (e) {
+    console.error('Storage corrupt, reset.', e);
+    return defaultData();
+  }
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+let state = loadData();
+
+function nextId() {
+  return state.meta.nextId++;
+}
+
+function persist() {
+  saveData();
+  renderMenu();
+  updateChrome();
+}
+
+/* =========================================================================
+   HELPERS
+   ========================================================================= */
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const fmtMoney = (cents) => cents == null ? '—' : (cents/100).toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+const fmtDate = (s) => {
+  if (!s) return '—';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const [y,m,d] = s.substr(0,10).split('-');
+    return `${d}.${m}.${y}`;
+  }
+  return s;
+};
+const todayISO = () => new Date().toISOString().substr(0,10);
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function currentUser() {
+  return state.meta.currentUser || { id: 1, name: 'Marcin Panus', role: 'admin' };
+}
+
+function can(permission) {
+  const role = currentUser().role || 'viewer';
+  return (ROLE_PERMISSIONS[role] || []).includes(permission);
+}
+
+function requirePermission(permission, message='Berechtigung fehlt.') {
+  if (!can(permission)) { toast(message, 'error'); return false; }
+  return true;
+}
+
+function audit(action, entity, entityId, before, after) {
+  if (!Array.isArray(state.auditLog)) state.auditLog = [];
+  state.auditLog.push({
+    id: nextId(),
+    at: new Date().toISOString(),
+    userId: currentUser().id,
+    userName: currentUser().name,
+    role: currentUser().role || 'viewer',
+    action, entity, entityId,
+    before: before ?? null,
+    after: after ?? null
+  });
+}
+
+const cloneData = (v) => JSON.parse(JSON.stringify(v ?? null));
+
+
+function parseGermanNumber(s) {
+  if (!s) return null;
+  const cleaned = String(s).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+function toCents(v) {
+  if (v == null) return null;
+  return Math.round(v * 100);
+}
+
+function levenshteinRatio(a, b) {
+  if (!a || !b) return 0;
+  a = a.toLowerCase(); b = b.toLowerCase();
+  if (a === b) return 100;
+  const m = a.length, n = b.length;
+  const dp = Array.from({length:m+1}, () => new Array(n+1).fill(0));
+  for (let i=0;i<=m;i++) dp[i][0]=i;
+  for (let j=0;j<=n;j++) dp[0][j]=j;
+  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++) {
+    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1]
+      : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  }
+  const dist = dp[m][n], maxLen = Math.max(m, n);
+  return Math.round((1 - dist/maxLen) * 100);
+}
+
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  $('#toast-root').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function modal({title, body, footer}) {
+  return new Promise((resolve) => {
+    const root = $('#modal-root');
+    const bg = document.createElement('div');
+    bg.className = 'modal-bg';
+    bg.innerHTML = `
+      <div class="modal">
+        <div class="modal-head">${escapeHtml(title)}</div>
+        <div class="modal-body"></div>
+        <div class="modal-foot"></div>
+      </div>`;
+    root.appendChild(bg);
+    const bodyEl = bg.querySelector('.modal-body');
+    const footEl = bg.querySelector('.modal-foot');
+    if (typeof body === 'string') bodyEl.innerHTML = body;
+    else if (body instanceof Node) bodyEl.appendChild(body);
+    const close = (val) => { bg.remove(); resolve(val); };
+    bg.addEventListener('click', e => { if (e.target === bg) close(null); });
+    if (footer) {
+      footer.forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'btn ' + (b.kind || '');
+        btn.textContent = b.label;
+        btn.onclick = () => close(b.value !== undefined ? b.value : true);
+        footEl.appendChild(btn);
+      });
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'btn sec';
+      btn.textContent = 'Schließen';
+      btn.onclick = () => close(null);
+      footEl.appendChild(btn);
+    }
+  });
+}
+
+async function confirmDialog(msg) {
+  const r = await modal({
+    title: 'Bestätigung',
+    body: `<div>${escapeHtml(msg)}</div>`,
+    footer: [
+      { label: 'Abbrechen', kind: 'sec', value: false },
+      { label: 'Bestätigen', kind: '', value: true }
+    ]
+  });
+  return r === true;
+}
+
+/* =========================================================================
+   ICONS
+   ========================================================================= */
+const ICO = {
+  dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
+  package:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><line x1="12" y1="22" x2="12" y2="12"/><path d="m3.3 7 8.7 5 8.7-5"/></svg>`,
+  upload:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  list:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
+  inbox:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`,
+  plus:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  arrow:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+  history:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.98"/><polyline points="12 7 12 12 15 15"/></svg>`,
+  users:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  tag:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+  truck:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
+  db:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>`,
+};
+
+/* =========================================================================
+   CATEGORIES & UNITS
+   ========================================================================= */
+const CATEGORIES = [
+  { id: 'arbeitskleidung', label: 'Arbeitskleidung', personal: true,  icon: '👕', color: '#2563eb' },
+  { id: 'sicherheitsschuhe', label: 'Sicherheitsschuhe', personal: true,  icon: '👟', color: '#d97706' },
+  { id: 'handschuhe', label: 'Handschuhe', personal: false, icon: '🧤', color: '#7c3aed' },
+  { id: 'schutzbrille', label: 'Schutzbrillen', personal: false, icon: '🥽', color: '#059669' },
+  { id: 'verbrauch', label: 'Verbrauchsmaterial', personal: false, icon: '📦', color: '#64748b' }
+];
+function catInfo(id) { return CATEGORIES.find(c => c.id === id) || { label: id||'—', icon: '📦', color: '#64748b' }; }
+const UNITS = ['Stück', 'Paar', 'Packung', 'Karton'];
+
+const MOVEMENT_TYPES = {
+  eingang: 'Wareneingang',
+  ausgabe: 'Ausgabe',
+  rueckgabe: 'Rückgabe',
+  defekt: 'Defekt/Entsorgung',
+  korrektur: 'Korrektur'
+};
+
+/* =========================================================================
+   PARSER (Rechnungs-Text → strukturierte Daten)
+   ========================================================================= */
+function parseInvoiceText(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim());
+  const result = {
+    supplierName: null,
+    invoiceNo: null,
+    invoiceDate: null,
+    items: []
+  };
+
+  // Rechnungsnummer
+  for (const line of lines) {
+    const m = line.match(/Rechnung[s]?[\s-]?(?:Nr\.?|#)\s*:?\s*([A-Z0-9_-]+)/i);
+    if (m) { result.invoiceNo = m[1]; break; }
+  }
+
+  // Datum
+  for (const line of lines) {
+    const m = line.match(/Rechnungsdatum\s*:?\s*(\d{2}\.\d{2}\.\d{4})/i);
+    if (m) {
+      const [d,mo,y] = m[1].split('.');
+      result.invoiceDate = `${y}-${mo}-${d}`;
+      break;
+    }
+  }
+
+  // Lieferant: erste Zeile mit Firmenform-Kürzel oder Logo-Linie
+  for (const line of lines.slice(0, 40)) {
+    if (!line) continue;
+    if (/(?:GmbH|AG|KG|OHG|GbR|UG|e\.K\.|e\.V\.)\b/.test(line)) {
+      result.supplierName = line.split('|')[0].trim();
+      break;
+    }
+  }
+
+  // Positionsblock
+  let inTable = false;
+  let current = null;
+  const flush = () => { if (current) result.items.push(current); current = null; };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!inTable) {
+      // Tabellenkopf erkennen
+      if (/Pos.*Artikel.*(?:Preis|Einzelpreis).*Menge/i.test(line)) {
+        inTable = true;
+      }
+      continue;
+    }
+
+    // Ende der Tabelle
+    if (/Zwischensumme.*brutto|^Nettobetrag|^Gesamtsumme|^Versand\s*\/\s*Bearbeitung/i.test(line)) {
+      flush();
+      break;
+    }
+
+    // Hauptzeile: Pos Label Preis Menge MwSt% Summe
+    const main = line.match(/^(\d+)\s+(.+?)\s+([\d.,]+)\s*€\s+(\d+)\s+([\d.,]+)\s*%\s+([\d.,]+)\s*€\s*$/);
+    if (main) {
+      flush();
+      current = {
+        pos: parseInt(main[1]),
+        rawLabel: main[2].trim(),
+        unitPrice: toCents(parseGermanNumber(main[3])),
+        quantity: parseInt(main[4]),
+        vatRate: parseGermanNumber(main[5]),
+        totalPrice: toCents(parseGermanNumber(main[6])),
+        rawSize: null,
+        rawVariant: null
+      };
+      continue;
+    }
+
+    // Attributzeile
+    if (current) {
+      const attr = line.match(/^(Farbe|Color|Größe|Groesse|Size|Material|Art\.-Nr\.?)\s*:\s*(.+)$/i);
+      if (attr) {
+        const k = attr[1].toLowerCase();
+        const v = attr[2].trim();
+        if (k.startsWith('farbe') || k === 'color') current.rawVariant = v;
+        else if (k.startsWith('größe') || k.startsWith('groesse') || k === 'size') current.rawSize = v;
+      }
+    }
+  }
+  flush();
+
+  return result;
+}
+
+/* SKU-Suche im Label (z. B. #E190, ABC-123) */
+function extractSku(label) {
+  if (!label) return null;
+  const m = label.match(/(#[A-Z0-9]+|[A-Z]{2,}-?\d+|\b[A-Z]\d{3,}\b)/);
+  return m ? m[1] : null;
+}
+
+/* Match-Versuch: liefert {status, score, articleId, note} */
+function matchLine(rawLine, supplierId) {
+  const sku = extractSku(rawLine.rawLabel);
+  const labelClean = (rawLine.rawLabel || '').replace(sku || '', '').trim();
+
+  // Stufe 1: SKU + (Größe + Variante) exakt
+  if (sku) {
+    const aliases = state.aliases.filter(a =>
+      a.supplierSku && a.supplierSku.toLowerCase() === sku.toLowerCase() &&
+      (!supplierId || !a.supplierId || a.supplierId === supplierId)
+    );
+    for (const a of aliases) {
+      const sizeOk = !rawLine.rawSize || !a.matchSize ||
+        a.matchSize.toLowerCase() === rawLine.rawSize.toLowerCase();
+      const variantOk = !rawLine.rawVariant || !a.matchVariant ||
+        a.matchVariant.toLowerCase() === rawLine.rawVariant.toLowerCase();
+      if (sizeOk && variantOk) {
+        const article = state.articles.find(x => x.id === a.articleId);
+        if (article && article.active !== false) {
+          return { status: 'auto', score: 100, articleId: article.id, note: 'SKU-Treffer' };
+        }
+      }
+    }
+    // Stufe 2: SKU passt, aber Größe nicht im Stamm
+    if (aliases.length > 0) {
+      return {
+        status: 'suggest', score: 80,
+        articleId: aliases[0].articleId,
+        note: 'SKU passt, Größe/Variante prüfen'
+      };
+    }
+  }
+
+  // Stufe 3: Fuzzy-Match auf internalName
+  let best = null;
+  const labelToCompare = labelClean || rawLine.rawLabel || '';
+  for (const art of state.articles.filter(a => a.active !== false)) {
+    const score = levenshteinRatio(art.internalName, labelToCompare);
+    const sizeMatches = !rawLine.rawSize || !art.size ||
+      art.size.toLowerCase() === rawLine.rawSize.toLowerCase();
+    const variantMatches = !rawLine.rawVariant || !art.variant ||
+      art.variant.toLowerCase() === rawLine.rawVariant.toLowerCase();
+    const adjusted = score - (sizeMatches ? 0 : 15) - (variantMatches ? 0 : 10);
+    if (!best || adjusted > best.adjusted) best = { article: art, score, adjusted, sizeMatches, variantMatches };
+  }
+  if (best && best.adjusted >= 80) {
+    return {
+      status: 'suggest', score: best.adjusted,
+      articleId: best.article.id,
+      note: `Fuzzy-Treffer (${best.adjusted}%)`
+    };
+  }
+
+  return { status: 'needs_review', score: 0, articleId: null, note: 'Kein Treffer' };
+}
+
+/* =========================================================================
+   ROUTING
+   ========================================================================= */
+const ROLE_LABELS = {
+  admin: 'Administrator',
+  office: 'Büro',
+  warehouse: 'Lager',
+  viewer: 'Betrachter'
+};
+
+function validateImportedState(obj) {
+  if (!obj || typeof obj !== 'object') return 'JSON enthält kein Objekt.';
+  const requiredArrays = ['suppliers','articles','aliases','employees','imports','importLines','movements','assignments'];
+  for (const key of requiredArrays) {
+    if (!Array.isArray(obj[key])) return `Pflichtbereich "${key}" fehlt oder ist keine Liste.`;
+  }
+  const seenIds = new Set();
+  for (const key of requiredArrays) {
+    for (const row of obj[key]) {
+      if (!row || typeof row !== 'object') return `Ungültiger Eintrag in "${key}".`;
+      if (!Number.isInteger(row.id) || row.id < 1) return `Eintrag in "${key}" hat keine gültige ID.`;
+      const globalKey = key + ':' + row.id;
+      if (seenIds.has(globalKey)) return `Doppelte ID ${row.id} in "${key}".`;
+      seenIds.add(globalKey);
+    }
+  }
+  const articleIds = new Set(obj.articles.map(a => a.id));
+  const employeeIds = new Set(obj.employees.map(e => e.id));
+  for (const m of obj.movements) {
+    if (!articleIds.has(m.articleId)) return `Bewegung ${m.id} verweist auf unbekannten Artikel.`;
+    if (m.employeeId && !employeeIds.has(m.employeeId)) return `Bewegung ${m.id} verweist auf unbekannten Mitarbeiter.`;
+  }
+  return null;
+}
+
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadText(filename, text, type='text/plain') {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+const ROUTES = {
+  '': renderDashboard,
+  'dashboard': renderDashboard,
+  'inventory': renderInventory,
+  'import': renderImport,
+  'imports': renderImportList,
+  'review': renderImportReview,
+  'manual-receipt': renderManualReceipt,
+  'issue': renderIssue,
+  'history': renderHistory,
+  'employees': renderEmployees,
+  'employee': renderEmployeeDetail,
+  'articles': renderArticlesList,
+  'article': renderArticleDetail,
+  'suppliers': renderSuppliers,
+  'data': renderDataView
+};
+
+const PAGE_TITLES = {
+  '': 'Dashboard',
+  'dashboard': 'Dashboard',
+  'inventory': 'Bestand',
+  'import': 'Import: Rechnung hochladen',
+  'imports': 'Import: Prüfqueue',
+  'review': 'Import prüfen',
+  'manual-receipt': 'Manueller Wareneingang',
+  'issue': 'Neue Ausgabe',
+  'history': 'Bewegungshistorie',
+  'employees': 'Mitarbeiter',
+  'employee': 'Mitarbeiter-Detail',
+  'articles': 'Artikel',
+  'article': 'Artikel-Detail',
+  'suppliers': 'Lieferanten',
+  'data': 'Daten verwalten'
+};
+
+function navigate(hash) {
+  if (location.hash !== '#' + hash) location.hash = '#' + hash;
+  else handleRoute();
+}
+
+function saveCurrentUser() {
+  const role = document.getElementById('userRole')?.value || currentUser().role;
+  const name = document.getElementById('userName')?.value || currentUser().name;
+  state.meta.currentUser = { ...currentUser(), role, name };
+  persist();
+  toast('Rolle gespeichert.', 'success');
+  handleRoute();
+}
+
+function openUserSettings() {
+  const u = currentUser();
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="field"><label>Anzeigename</label><input id="userName" value="${escapeHtml(u.name || '')}"></div>
+    <div class="field"><label>Rolle</label>
+      <select id="userRole">
+        ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${k===u.role?'selected':''}>${v}</option>`).join('')}
+      </select>
+    </div>
+    <p style="font-size:12px;color:#6b7280;margin:8px 0 0;">Tipp: als "Admin" hast du vollen Zugriff.</p>
+  `;
+  modal({ title: '⚙ Benutzer / Rolle', body: div, footer: [
+    { label: 'Abbrechen', kind:'sec', value: false },
+    { label: 'Speichern', value: true }
+  ]}).then(ok => { if (ok) saveCurrentUser(); });
+}
+
+
+function updateChrome() {
+  const u = currentUser();
+  const el = document.getElementById('sidebar-user');
+  const roleEl = document.getElementById('sidebar-role');
+  if (el) el.textContent = u.name || 'Angemeldet';
+  if (roleEl) roleEl.textContent = ROLE_LABELS[u.role] || u.role || '';
+  const avatarEl = document.getElementById('sidebar-avatar');
+  if (avatarEl) avatarEl.textContent = (u.name || 'M')[0].toUpperCase();
+}
+
+
+function handleRoute() {
+  const hash = location.hash.replace(/^#/, '');
+  const [route, ...params] = hash.split('/');
+  const fn = ROUTES[route] || renderDashboard;
+  $('#page-title').textContent = PAGE_TITLES[route] || 'Lagerverwaltung';
+  $('#crumbs').textContent = '';
+  fn(...params);
+  renderMenu();
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange', handleRoute);
+
+/* =========================================================================
+   MENU
+   ========================================================================= */
+function renderMenu() {
+  const hash = location.hash.replace(/^#/, '').split('/')[0];
+  const lowStockCount = state.articles.filter(a => a.active !== false && a.stock <= a.minStock && a.minStock > 0).length;
+  const pendingImports = state.imports.filter(imp => imp.status !== 'confirmed' && imp.status !== 'cancelled').length;
+
+  const items = [
+    { group: 'Übersicht', items: [
+      { href: 'dashboard',      label: 'Dashboard',          ico: ICO.dashboard },
+      { href: 'inventory',      label: 'Bestand',            ico: ICO.package, badge: lowStockCount > 0 ? lowStockCount : null },
+    ]},
+    { group: 'Wareneingang', items: [
+      { href: 'import',         label: 'Import',             ico: ICO.upload },
+      { href: 'imports',        label: 'Prüfqueue',          ico: ICO.inbox,   badge: pendingImports > 0 ? pendingImports : null },
+      { href: 'manual-receipt', label: 'Manueller Eingang',  ico: ICO.plus },
+    ]},
+    { group: 'Ausgabe', items: [
+      { href: 'issue',          label: 'Neue Ausgabe',       ico: ICO.arrow },
+      { href: 'history',        label: 'Historie',           ico: ICO.history },
+    ]},
+    { group: 'Stammdaten', items: [
+      { href: 'employees',      label: 'Mitarbeiter',        ico: ICO.users },
+      { href: 'articles',       label: 'Artikel',            ico: ICO.tag },
+      { href: 'suppliers',      label: 'Lieferanten',        ico: ICO.truck },
+    ]},
+    { group: 'System', items: [
+      { href: 'data',           label: 'Daten',              ico: ICO.db },
+    ]}
+  ];
+  const html = items.map(g => `
+    <div class="group">
+      <div class="group-title">${escapeHtml(g.group)}</div>
+      ${g.items.map(it => `
+        <a href="#${it.href}" class="${hash === it.href ? 'active' : ''}">
+          <span class="mlink">
+            <span class="mico">${it.ico || ''}</span>
+            <span>${escapeHtml(it.label)}</span>
+          </span>
+          ${it.badge ? `<span class="badge">${it.badge}</span>` : ''}
+        </a>
+      `).join('')}
+    </div>
+  `).join('');
+  $('#menu').innerHTML = html;
+}
+
+/* =========================================================================
+   VIEWS
+   ========================================================================= */
+function renderDashboard() {
+  const v = $('#view');
+  const lowStock = state.articles.filter(a => a.active !== false && a.stock <= a.minStock && a.minStock > 0);
+  const pendingImports = state.imports.filter(imp => imp.status !== 'confirmed' && imp.status !== 'cancelled');
+
+  // Auffälliger Verbrauch: Mitarbeiter mit > 3 Ausgaben innerhalb von 30 Tagen für gleichen Artikel
+  const since = new Date(); since.setDate(since.getDate() - 30);
+  const sinceISO = since.toISOString().substr(0,10);
+  const heatmap = {};
+  state.movements.filter(m => m.type === 'ausgabe' && m.occurredAt >= sinceISO && m.employeeId).forEach(m => {
+    const k = m.employeeId + '_' + m.articleId;
+    heatmap[k] = (heatmap[k] || 0) + 1;
+  });
+  const anomalies = Object.entries(heatmap).filter(([_,c]) => c >= 3).map(([k,c]) => {
+    const [eid, aid] = k.split('_').map(Number);
+    return { employee: state.employees.find(e => e.id === eid), article: state.articles.find(a => a.id === aid), count: c };
+  }).filter(x => x.employee && x.article);
+
+  const lastMovements = [...state.movements].sort((a,b) => (b.occurredAt+b.id).localeCompare(a.occurredAt+a.id)).slice(0,10);
+
+  const activeArticles = state.articles.filter(a => a.active !== false).length;
+  const kpiCard = (icon, colorClass, label, val, hint) => `
+    <div class="kpi">
+      <div class="kpi-icon ${colorClass}">${icon}</div>
+      <div class="kpi-body">
+        <div class="kpi-label">${label}</div>
+        <div class="kpi-val ${colorClass}">${val}</div>
+        <div class="kpi-hint">${hint}</div>
+      </div>
+    </div>`;
+
+  v.innerHTML = `
+    <div class="kpi-grid">
+      ${kpiCard('🔴', lowStock.length ? 'red' : 'green',
+        'Mindestbestand unterschritten', lowStock.length,
+        lowStock.length ? lowStock.slice(0,2).map(a=>escapeHtml(a.internalName)).join(', ')+(lowStock.length>2?' …':'') : 'Alles im grünen Bereich')}
+      ${kpiCard('📥', pendingImports.length ? 'yellow' : 'green',
+        'Importe zu prüfen', pendingImports.length,
+        pendingImports.length ? 'Bitte Positionen prüfen & buchen' : 'Keine offenen Importe')}
+      ${kpiCard('⚠️', anomalies.length ? 'yellow' : 'green',
+        'Auffälliger Verbrauch', anomalies.length,
+        'Letzte 30 Tage · ≥ 3 Ausgaben/Artikel')}
+      ${kpiCard('📦', 'blue',
+        'Aktive Artikel', activeArticles,
+        state.employees.filter(e=>e.active!==false).length + ' Mitarbeiter · ' + state.suppliers.length + ' Lieferanten')}
+    </div>
+
+    <div class="row">
+      <div class="card" style="flex:1; min-width:340px;">
+        <h2>⚠ Mindestbestand-Warnung</h2>
+        ${lowStock.length === 0
+          ? '<div class="empty"><div class="empty-ico">✅</div><div>Alles im grünen Bereich</div></div>'
+          : `<table>
+            <thead><tr><th>Artikel</th><th>Größe</th><th class="num">Bestand</th><th class="num">Min</th></tr></thead>
+            <tbody>
+              ${lowStock.slice(0,8).map(a => `
+                <tr class="row-danger">
+                  <td><a href="#article/${a.id}">${escapeHtml(a.internalName)}</a></td>
+                  <td>${escapeHtml(a.size || '—')}</td>
+                  <td class="num"><span class="pill red">${a.stock}</span></td>
+                  <td class="num">${a.minStock}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+
+          </table>`}
+      </div>
+      <div class="card" style="flex:1; min-width:340px;">
+        <h2>📥 Offene Importe</h2>
+        ${pendingImports.length === 0
+          ? '<div class="empty"><div class="empty-ico">🎉</div><div>Keine offenen Importe</div></div>'
+          : `<table>
+            <thead><tr><th>Rechnungs-Nr.</th><th>Datum</th><th>Lieferant</th><th></th></tr></thead>
+            <tbody>
+              ${pendingImports.slice(0,8).map(imp => `
+                <tr>
+                  <td>${escapeHtml(imp.invoiceNo || '—')}</td>
+                  <td>${fmtDate(imp.invoiceDate)}</td>
+                  <td>${escapeHtml((state.suppliers.find(s => s.id === imp.supplierId)||{}).name || imp.supplierName || '—')}</td>
+                  <td><a href="#review/${imp.id}">prüfen →</a></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2>🔄 Letzte Bewegungen</h2>
+      ${lastMovements.length === 0
+        ? '<div class="empty"><div class="empty-ico">📋</div><div>Noch keine Bewegungen erfasst</div></div>'
+        : `<table>
+          <thead><tr><th>Datum</th><th>Typ</th><th>Artikel</th><th>Mitarbeiter</th><th class="num">Menge</th></tr></thead>
+          <tbody>
+            ${lastMovements.map(m => {
+              const art = state.articles.find(a => a.id === m.articleId);
+              const emp = state.employees.find(e => e.id === m.employeeId);
+              const typePill = { eingang:'green', ausgabe:'blue', rueckgabe:'gray', defekt:'red', korrektur:'yellow' }[m.type];
+              return `
+                <tr>
+                  <td>${fmtDate(m.occurredAt)}</td>
+                  <td><span class="pill ${typePill}">${MOVEMENT_TYPES[m.type]}</span></td>
+                  <td>${art ? escapeHtml(art.internalName) : '—'}${art && art.size ? ' · '+escapeHtml(art.size) : ''}</td>
+                  <td>${emp ? escapeHtml(emp.lastName + ', ' + emp.firstName) : '—'}</td>
+                  <td class="num">${m.quantity > 0 ? '+'+m.quantity : m.quantity}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>`}
+    </div>
+
+    ${state.articles.length === 0 ? `
+      <div class="card" style="margin-top:16px; border-left: 3px solid #3b82f6;">
+        <h2>🚀 Erste Schritte</h2>
+        <p class="lead">Das System ist leer. Du kannst Beispieldaten laden, um den Import-Workflow direkt mit der Bandyshirt-Rechnung zu testen.</p>
+        <button onclick="loadDemoData()">Demo-Daten laden</button>
+        <button class="sec" onclick="navigate('articles')" style="margin-left:6px;">Eigene Artikel anlegen</button>
+      </div>
+    ` : ''}
+  `;
+}
+
+/* ---------- Inventory ---------- */
+function renderInventory() {
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="filterText" placeholder="Suche nach Bezeichnung / Lagerort …" style="max-width:340px;">
+      <select id="filterCat" style="max-width:200px;">
+        <option value="">Alle Kategorien</option>
+        ${CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+      </select>
+      <label style="margin:0; display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="onlyLow" style="width:auto;"> nur Mindestbestand
+      </label>
+      <div class="spacer"></div>
+      <button onclick="navigate('articles')">Artikel verwalten</button>
+    </div>
+    <div class="card scroll-x">
+      <table id="invTable"></table>
+    </div>
+  `;
+  const refresh = () => {
+    const txt = $('#filterText').value.toLowerCase();
+    const cat = $('#filterCat').value;
+    const onlyLow = $('#onlyLow').checked;
+    const rows = state.articles
+      .filter(a => a.active !== false)
+      .filter(a => !cat || a.category === cat)
+      .filter(a => !onlyLow || (a.minStock > 0 && a.stock <= a.minStock))
+      .filter(a => !txt || (a.internalName + ' ' + (a.location||'') + ' ' + (a.size||'') + ' ' + (a.variant||'')).toLowerCase().includes(txt))
+      .sort((a,b) => a.internalName.localeCompare(b.internalName));
+    $('#invTable').innerHTML = `
+      <thead>
+        <tr>
+          <th>Artikel</th>
+          <th>Kategorie</th>
+          <th>Größe</th>
+          <th>Variante</th>
+          <th>Lagerort</th>
+          <th class="num">Bestand</th>
+          <th class="num">Min</th>
+          <th class="num">Letzter EK</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.length === 0 ? '<tr><td colspan="8"><div class="empty"><div class="empty-ico">🔍</div><div>Keine Artikel gefunden</div></div></td></tr>' : rows.map(a => {
+          const low = a.minStock > 0 && a.stock <= a.minStock;
+          const ci = catInfo(a.category);
+          return `
+            <tr class="${low ? 'row-danger' : ''}">
+              <td><a href="#article/${a.id}">${escapeHtml(a.internalName)}</a></td>
+              <td><span title="${escapeHtml(ci.label)}">${ci.icon} ${escapeHtml(ci.label)}</span></td>
+              <td>${escapeHtml(a.size || '—')}</td>
+              <td>${escapeHtml(a.variant || '—')}</td>
+              <td>${escapeHtml(a.location || '—')}</td>
+              <td class="num"><span class="pill ${low ? 'red' : 'green'}">${a.stock}</span></td>
+              <td class="num">${a.minStock || 0}</td>
+              <td class="num">${fmtMoney(a.lastPurchasePrice)}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    `;
+  };
+  $('#filterText').oninput = refresh;
+  $('#filterCat').onchange = refresh;
+  $('#onlyLow').onchange = refresh;
+  refresh();
+}
+
+/* ---------- Import: Datei hochladen / Text einfügen ---------- */
+function renderImport() {
+  const v = $('#view');
+  v.innerHTML = `
+    <p class="lead">Lade eine Rechnung als <code>.txt</code>-Datei hoch oder kopiere den Text aus der Rechnung in das Feld unten. Das System erkennt Lieferant, Rechnungsnummer und Positionen, ordnet bekannte Artikel automatisch zu und markiert unklare Zeilen zur Prüfung. <strong>Es wird nichts gebucht, bevor du bestätigst.</strong></p>
+
+    <div class="card">
+      <div class="grid-2">
+        <div>
+          <label>Textdatei hochladen</label>
+          <input type="file" id="fileInput" accept=".txt,text/plain">
+          <div class="help">Aus PDF: Text per "Markieren &amp; Kopieren" oder „Datei → Speichern als TXT" extrahieren.</div>
+        </div>
+        <div>
+          <label>Oder Beispiel laden</label>
+          <button class="sec" onclick="loadSampleInvoice()">Bandyshirt-Rechnung einfügen</button>
+        </div>
+      </div>
+      <hr class="sep">
+      <div class="field">
+        <label>Rechnungstext</label>
+        <textarea id="invoiceText" rows="14" placeholder="Hier den kompletten Rechnungstext einfügen …"></textarea>
+      </div>
+      <div class="actions">
+        <button onclick="parseAndCreateImport()">Erkennen &amp; weiter zur Prüfung</button>
+        <button class="sec" onclick="$('#invoiceText').value=''">Leeren</button>
+      </div>
+    </div>
+  `;
+  $('#fileInput').onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { $('#invoiceText').value = r.result; };
+    r.readAsText(f, 'utf-8');
+  };
+}
+
+function loadSampleInvoice() {
+  $('#invoiceText').value = `Rechnungs-Nr.:
+Rechnung #: BSi042600160397
+Rechnungsdatum: 30.04.2026
+Bestellung #: BS042600167275
+Bestelldatum: 28.04.2026
+Bandyshirt GmbH | Rüppurerstr. 1 | 76137 Karlsruhe
+P&P Buntmetallhandel
+Marcin Panus
+Bamberger Str. 3 3
+Düsseldorf, 40599
+Deutschland
+Zahlungsart Versandart
+Paypal Premium Versand
+DHl - Standard : 00340434192182157112
+Pos Artikel Preis Menge MwSt. Zwischensumme (netto)
+1 #E190 T-Shirt 31,89 € 7 19.0 % 187,59 €
+Farbe : Schwarz
+Größe : M
+2 #E190 T-Shirt 31,89 € 7 19.0 % 187,59 €
+Farbe : Schwarz
+Größe : L
+3 #E190 T-Shirt 31,89 € 5 19.0 % 133,99 €
+Farbe : Schwarz
+Größe : XXL
+Zwischensumme (brutto): 605,91 €
+Rabatt: -60,59 €
+Versand / Bearbeitung (brutto): 5,90 €
+Nettobetrag: 463,21 €
+zzgl. 19% MwSt. 88,01 €
+Gesamtsumme: 551,22 €`;
+}
+
+function parseAndCreateImport() {
+  const text = $('#invoiceText').value;
+  if (!text || text.trim().length < 20) { toast('Bitte Rechnungstext einfügen.', 'error'); return; }
+  const parsed = parseInvoiceText(text);
+  if (parsed.items.length === 0) {
+    toast('Keine Positionen erkannt. Bitte Tabellenkopf prüfen.', 'error');
+    return;
+  }
+  // Lieferant zuordnen oder behalten
+  let supplierId = null;
+  if (parsed.supplierName) {
+    const found = state.suppliers.find(s => s.name.toLowerCase() === parsed.supplierName.toLowerCase());
+    if (found) supplierId = found.id;
+  }
+  // Import anlegen
+  const importId = nextId();
+  const imp = {
+    id: importId,
+    supplierId,
+    supplierName: parsed.supplierName,
+    invoiceNo: parsed.invoiceNo,
+    invoiceDate: parsed.invoiceDate,
+    rawText: text,
+    status: 'parsed',
+    createdAt: todayISO()
+  };
+  state.imports.push(imp);
+  // Zeilen anlegen + matchen
+  parsed.items.forEach(item => {
+    const m = matchLine(item, supplierId);
+    state.importLines.push({
+      id: nextId(),
+      importId,
+      pos: item.pos,
+      rawLabel: item.rawLabel,
+      rawSize: item.rawSize,
+      rawVariant: item.rawVariant,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+      matchStatus: m.status,
+      matchScore: m.score,
+      matchedArticleId: m.articleId,
+      note: m.note
+    });
+  });
+  persist();
+  toast(`Import angelegt mit ${parsed.items.length} Positionen.`, 'success');
+  navigate('review/' + importId);
+}
+
+/* ---------- Import: Liste ---------- */
+function renderImportList() {
+  const v = $('#view');
+  const open = state.imports.filter(i => i.status !== 'confirmed' && i.status !== 'cancelled')
+    .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+  const done = state.imports.filter(i => i.status === 'confirmed' || i.status === 'cancelled')
+    .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+
+  const renderRow = imp => {
+    const lines = state.importLines.filter(l => l.importId === imp.id);
+    const auto = lines.filter(l => l.matchStatus === 'auto').length;
+    const sug = lines.filter(l => l.matchStatus === 'suggest').length;
+    const need = lines.filter(l => l.matchStatus === 'needs_review').length;
+    return `
+      <tr>
+        <td>${escapeHtml(imp.invoiceNo || '—')}</td>
+        <td>${fmtDate(imp.invoiceDate)}</td>
+        <td>${escapeHtml((state.suppliers.find(s=>s.id===imp.supplierId)||{}).name || imp.supplierName || '—')}</td>
+        <td>${lines.length}</td>
+        <td>
+          ${auto ? `<span class="pill green">${auto} auto</span> ` : ''}
+          ${sug ? `<span class="pill yellow">${sug} prüfen</span> ` : ''}
+          ${need ? `<span class="pill red">${need} unklar</span>` : ''}
+        </td>
+        <td><span class="pill ${imp.status==='confirmed'?'green':imp.status==='cancelled'?'gray':'yellow'}">${imp.status}</span></td>
+        <td><a href="#review/${imp.id}">öffnen →</a></td>
+      </tr>
+    `;
+  };
+
+  v.innerHTML = `
+    <div class="toolbar">
+      <button onclick="navigate('import')">+ Neuen Import starten</button>
+    </div>
+    <div class="card">
+      <h2>Offene Importe (${open.length})</h2>
+      ${open.length === 0 ? '<div class="empty">Keine offenen Importe.</div>' : `
+        <table>
+          <thead><tr><th>Rechnungs-Nr.</th><th>Datum</th><th>Lieferant</th><th>Pos.</th><th>Status</th><th></th><th></th></tr></thead>
+          <tbody>${open.map(renderRow).join('')}</tbody>
+        </table>
+      `}
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2>Abgeschlossen (${done.length})</h2>
+      ${done.length === 0 ? '<div class="empty">Noch keine abgeschlossenen Importe.</div>' : `
+        <table>
+          <thead><tr><th>Rechnungs-Nr.</th><th>Datum</th><th>Lieferant</th><th>Pos.</th><th>Status</th><th></th><th></th></tr></thead>
+          <tbody>${done.slice(0,30).map(renderRow).join('')}</tbody>
+        </table>
+      `}
+    </div>
+  `;
+}
+
+/* ---------- Import: Prüfung & Bestätigung ---------- */
+function renderImportReview(idStr) {
+  const id = parseInt(idStr);
+  const imp = state.imports.find(i => i.id === id);
+  if (!imp) { $('#view').innerHTML = '<div class="empty">Import nicht gefunden.</div>'; return; }
+  const lines = state.importLines.filter(l => l.importId === id).sort((a,b) => a.pos - b.pos);
+  const v = $('#view');
+
+  const supplier = state.suppliers.find(s => s.id === imp.supplierId);
+  const supplierLabel = supplier ? supplier.name : (imp.supplierName ? `${imp.supplierName} <button class="ghost small" onclick="adoptSupplier(${imp.id})">als Lieferanten anlegen</button>` : 'unbekannt');
+
+  v.innerHTML = `
+    <div class="card">
+      <div class="grid-3">
+        <div><label>Rechnungsnummer</label><div>${escapeHtml(imp.invoiceNo || '—')}</div></div>
+        <div><label>Datum</label><div>${fmtDate(imp.invoiceDate)}</div></div>
+        <div><label>Lieferant</label><div>${supplierLabel}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <div class="toolbar">
+        <h2 style="margin:0;">Positionen (${lines.length})</h2>
+        <div class="spacer"></div>
+        <span class="pill green">${lines.filter(l=>l.matchStatus==='auto').length} auto</span>
+        <span class="pill yellow">${lines.filter(l=>l.matchStatus==='suggest').length} prüfen</span>
+        <span class="pill red">${lines.filter(l=>l.matchStatus==='needs_review').length} unklar</span>
+      </div>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Rechnungstext</th>
+              <th class="num">Menge</th>
+              <th class="num">EK netto</th>
+              <th>Status</th>
+              <th>Zugeordneter Artikel</th>
+              <th>Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.map(line => {
+              const art = state.articles.find(a => a.id === line.matchedArticleId);
+              const ampel = line.matchStatus === 'auto' ? 'g' : line.matchStatus === 'suggest' ? 'y' : 'r';
+              return `
+                <tr>
+                  <td>${line.pos}</td>
+                  <td>
+                    <div><strong>${escapeHtml(line.rawLabel)}</strong></div>
+                    ${line.rawSize ? `<div style="font-size:12px; color:#6b7280;">Größe: ${escapeHtml(line.rawSize)}</div>` : ''}
+                    ${line.rawVariant ? `<div style="font-size:12px; color:#6b7280;">Variante: ${escapeHtml(line.rawVariant)}</div>` : ''}
+                  </td>
+                  <td class="num">${line.quantity}</td>
+                  <td class="num">${fmtMoney(line.unitPrice)}</td>
+                  <td>
+                    <span class="ampel ${ampel}"></span>
+                    ${line.matchStatus === 'auto' ? '<span class="pill green">automatisch</span>' :
+                      line.matchStatus === 'suggest' ? '<span class="pill yellow">Vorschlag</span>' :
+                      line.matchStatus === 'needs_review' ? '<span class="pill red">unklar</span>' :
+                      '<span class="pill gray">manuell</span>'}
+                    <div class="help">${escapeHtml(line.note || '')}</div>
+                  </td>
+                  <td>
+                    ${art ? `<strong>${escapeHtml(art.internalName)}</strong><br><span style="font-size:12px; color:#6b7280;">${escapeHtml(art.size||'')} ${escapeHtml(art.variant||'')}</span>` : '<em style="color:#9ca3af;">— nicht zugeordnet —</em>'}
+                  </td>
+                  <td>
+                    <div class="actions">
+                      <button class="sec small" onclick="assignArticleToLine(${line.id})">Zuordnen</button>
+                      <button class="sec small" onclick="newArticleFromLine(${line.id})">Neu anlegen</button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <hr class="sep">
+      <div class="actions" style="justify-content:flex-end;">
+        <button class="sec" onclick="cancelImport(${imp.id})">Import verwerfen</button>
+        <button onclick="confirmImport(${imp.id})">Wareneingang buchen</button>
+      </div>
+      <div class="help" style="margin-top:6px;">
+        Beim Buchen werden Bestände erhöht, der letzte Einkaufspreis aktualisiert und manuelle Zuordnungen als Aliase gelernt.
+      </div>
+    </div>
+  `;
+}
+
+function adoptSupplier(importId) {
+  const imp = state.imports.find(i => i.id === importId);
+  if (!imp || !imp.supplierName) return;
+  const id = nextId();
+  state.suppliers.push({ id, name: imp.supplierName });
+  imp.supplierId = id;
+  persist();
+  toast('Lieferant angelegt.', 'success');
+  navigate('review/' + importId);
+}
+
+async function assignArticleToLine(lineId) {
+  const line = state.importLines.find(l => l.id === lineId);
+  if (!line) return;
+  const articles = state.articles.filter(a => a.active !== false).sort((a,b) => a.internalName.localeCompare(b.internalName));
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="field">
+      <label>Suche Artikel</label>
+      <input type="search" id="search" placeholder="Tippen zum Filtern …">
+    </div>
+    <div id="list" style="max-height:340px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:6px;"></div>
+  `;
+  const refresh = (q='') => {
+    const filtered = articles.filter(a => (a.internalName + ' ' + (a.size||'') + ' ' + (a.variant||'')).toLowerCase().includes(q.toLowerCase()));
+    div.querySelector('#list').innerHTML = filtered.map(a => `
+      <div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #f3f4f6; display:flex; justify-content:space-between;" onclick="window.__pickArticle(${a.id})">
+        <span><strong>${escapeHtml(a.internalName)}</strong> <span style="color:#6b7280;">${escapeHtml(a.size||'')} ${escapeHtml(a.variant||'')}</span></span>
+        <span style="color:#6b7280; font-size:12px;">Bestand: ${a.stock}</span>
+      </div>
+    `).join('') || '<div class="empty">Keine Artikel.</div>';
+  };
+  refresh();
+  div.querySelector('#search').oninput = (e) => refresh(e.target.value);
+  const pick = new Promise(resolve => { window.__pickArticle = (id) => resolve(id); });
+  const m = modal({ title: 'Artikel zuordnen', body: div, footer: [{ label:'Abbrechen', kind:'sec', value:null }] });
+  const result = await Promise.race([pick, m]);
+  delete window.__pickArticle;
+  document.querySelectorAll('.modal-bg').forEach(x => x.remove());
+  if (!result) return;
+  line.matchedArticleId = result;
+  line.matchStatus = 'manual';
+  line.matchScore = 100;
+  line.note = 'Manuell zugeordnet';
+  persist();
+  toast('Zuordnung gespeichert.', 'success');
+  navigate('review/' + line.importId);
+}
+
+function newArticleFromLine(lineId) {
+  const line = state.importLines.find(l => l.id === lineId);
+  if (!line) return;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="field"><label>Interne Bezeichnung</label><input id="iname" value="${escapeHtml(line.rawLabel.replace(/^#?[A-Z0-9-]+\s*/, ''))}"></div>
+    <div class="grid-2">
+      <div class="field"><label>Kategorie</label><select id="icat">${CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}</select></div>
+      <div class="field"><label>Einheit</label><select id="iunit">${UNITS.map(u => `<option>${u}</option>`).join('')}</select></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Größe</label><input id="isize" value="${escapeHtml(line.rawSize||'')}"></div>
+      <div class="field"><label>Variante</label><input id="ivar" value="${escapeHtml(line.rawVariant||'')}"></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Mindestbestand</label><input id="imin" type="number" value="0" min="0"></div>
+      <div class="field"><label>Lagerort</label><input id="iloc"></div>
+    </div>
+  `;
+  modal({
+    title: 'Neuen Artikel anlegen',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind: 'sec', value: false },
+      { label: 'Anlegen &amp; zuordnen', value: true }
+    ]
+  }).then(ok => {
+    if (!ok) return;
+    const id = nextId();
+    const cat = div.querySelector('#icat').value;
+    const article = {
+      id,
+      internalName: div.querySelector('#iname').value.trim() || line.rawLabel,
+      category: cat,
+      size: div.querySelector('#isize').value.trim() || null,
+      variant: div.querySelector('#ivar').value.trim() || null,
+      unit: div.querySelector('#iunit').value,
+      stock: 0,
+      minStock: parseInt(div.querySelector('#imin').value) || 0,
+      location: div.querySelector('#iloc').value.trim() || null,
+      lastPurchasePrice: null,
+      personalAssignment: !!(catInfo(cat) || {}).personal,
+      active: true
+    };
+    state.articles.push(article);
+    line.matchedArticleId = id;
+    line.matchStatus = 'manual';
+    line.matchScore = 100;
+    line.note = 'Neu angelegt';
+    persist();
+    toast('Artikel angelegt und zugeordnet.', 'success');
+    navigate('review/' + line.importId);
+  });
+}
+
+async function confirmImport(importId) {
+  if (!requirePermission('import', 'Nur Office & Admin dürfen Importe bestätigen.')) return;
+  const imp = state.imports.find(i => i.id === importId);
+  if (!imp) return;
+  const lines = state.importLines.filter(l => l.importId === importId);
+  const unresolved = lines.filter(l => !l.matchedArticleId);
+  if (unresolved.length > 0) {
+    toast(`${unresolved.length} Position(en) noch nicht zugeordnet.`, 'error');
+    return;
+  }
+  if (!await confirmDialog(`${lines.length} Position(en) buchen und Bestände erhöhen?`)) return;
+
+  let aliasesLearned = 0;
+  for (const line of lines) {
+    const art = state.articles.find(a => a.id === line.matchedArticleId);
+    if (!art) continue;
+    art.stock += line.quantity;
+    if (line.unitPrice != null) art.lastPurchasePrice = line.unitPrice;
+    state.movements.push({
+      id: nextId(),
+      articleId: art.id,
+      type: 'eingang',
+      quantity: line.quantity,
+      employeeId: null,
+      importLineId: line.id,
+      unitPrice: line.unitPrice,
+      note: `Import ${imp.invoiceNo || ''}`,
+      occurredAt: imp.invoiceDate || todayISO()
+    });
+    // Alias lernen: SKU oder rohes Label
+    const sku = extractSku(line.rawLabel);
+    const exists = state.aliases.find(a =>
+      a.articleId === art.id &&
+      (a.supplierId || null) === (imp.supplierId || null) &&
+      (a.supplierSku || '') === (sku || '') &&
+      (a.matchSize || '') === (line.rawSize || '') &&
+      (a.matchVariant || '') === (line.rawVariant || '')
+    );
+    if (!exists) {
+      state.aliases.push({
+        id: nextId(),
+        articleId: art.id,
+        supplierId: imp.supplierId || null,
+        supplierSku: sku,
+        supplierLabel: line.rawLabel,
+        matchSize: line.rawSize,
+        matchVariant: line.rawVariant
+      });
+      aliasesLearned++;
+    }
+  }
+  imp.status = 'confirmed';
+  imp.confirmedAt = todayISO();
+  audit('IMPORT_CONFIRMED', 'import', importId, {status:'parsed'}, {status:'confirmed', lines: lines.length});
+  persist();
+  toast(`${lines.length} Bewegungen gebucht. ${aliasesLearned} neue Aliase gelernt.`, 'success');
+  navigate('imports');
+}
+
+async function cancelImport(importId) {
+  if (!requirePermission('import', 'Nur Office & Admin dürfen Importe verwerfen.')) return;
+  if (!await confirmDialog('Diesen Import wirklich verwerfen?')) return;
+  const imp = state.imports.find(i => i.id === importId);
+  if (imp) { audit('IMPORT_CANCELLED', 'import', importId, {status: imp.status}, {status:'cancelled'}); imp.status = 'cancelled'; }
+  persist();
+  toast('Import verworfen.');
+  navigate('imports');
+}
+
+/* ---------- Manueller Wareneingang ---------- */
+function renderManualReceipt() {
+  const v = $('#view');
+  v.innerHTML = `
+    <p class="lead">Bestand direkt erhöhen (z. B. Anfangsbestand oder Lieferung ohne Rechnungsdatei).</p>
+    <div class="card">
+      <div class="grid-2">
+        <div class="field">
+          <label>Artikel</label>
+          <select id="rArt"></select>
+        </div>
+        <div class="field">
+          <label>Menge</label>
+          <input id="rQty" type="number" min="1" value="1">
+        </div>
+        <div class="field">
+          <label>Einkaufspreis netto (€, optional)</label>
+          <input id="rPrice" type="text" placeholder="z. B. 12,90">
+        </div>
+        <div class="field">
+          <label>Datum</label>
+          <input id="rDate" type="date" value="${todayISO()}">
+        </div>
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Notiz</label>
+          <input id="rNote" placeholder="z. B. Lieferung XY ohne Rechnung">
+        </div>
+      </div>
+      <div class="actions">
+        <button onclick="bookManualReceipt()">Buchen</button>
+      </div>
+    </div>
+  `;
+  $('#rArt').innerHTML = state.articles.filter(a=>a.active!==false)
+    .sort((a,b)=>a.internalName.localeCompare(b.internalName))
+    .map(a => `<option value="${a.id}">${escapeHtml(a.internalName)}${a.size?' · '+a.size:''}${a.variant?' · '+a.variant:''}</option>`).join('') || '<option>— erst Artikel anlegen —</option>';
+}
+
+function bookManualReceipt() {
+  if (!requirePermission('stock', 'Nur Lager & Admin dürfen Wareneingänge buchen.')) return;
+  const aid = parseInt($('#rArt').value);
+  const qty = parseInt($('#rQty').value);
+  const price = parseGermanNumber($('#rPrice').value);
+  const date = $('#rDate').value || todayISO();
+  const note = $('#rNote').value.trim();
+  if (!aid || !qty || qty <= 0) { toast('Artikel und Menge angeben.', 'error'); return; }
+  const art = state.articles.find(a => a.id === aid);
+  if (!art) return;
+  art.stock += qty;
+  if (price != null) art.lastPurchasePrice = toCents(price);
+  state.movements.push({
+    id: nextId(),
+    articleId: aid,
+    type: 'eingang',
+    quantity: qty,
+    employeeId: null,
+    importLineId: null,
+    unitPrice: price != null ? toCents(price) : null,
+    note: note || 'Manueller Wareneingang',
+    occurredAt: date
+  });
+  audit('MANUAL_RECEIPT', 'article', aid, {stock: art.stock - qty}, {stock: art.stock, qty, date});
+  persist();
+  toast('Wareneingang gebucht.', 'success');
+  navigate('inventory');
+}
+
+/* ---------- Ausgabe an Mitarbeiter ---------- */
+function renderIssue() {
+  const v = $('#view');
+  if (state.employees.length === 0 || state.articles.length === 0) {
+    v.innerHTML = `<div class="card"><div class="empty">
+      ${state.employees.length === 0 ? 'Bitte erst <a href="#employees">Mitarbeiter</a> anlegen.<br>' : ''}
+      ${state.articles.length === 0 ? 'Bitte erst <a href="#articles">Artikel</a> anlegen.' : ''}
+    </div></div>`;
+    return;
+  }
+  v.innerHTML = `
+    <div class="card">
+      <div class="grid-2">
+        <div class="field">
+          <label>Mitarbeiter</label>
+          <select id="iEmp"></select>
+        </div>
+        <div class="field">
+          <label>Artikel</label>
+          <select id="iArt"></select>
+        </div>
+        <div class="field">
+          <label>Menge</label>
+          <input id="iQty" type="number" min="1" value="1">
+        </div>
+        <div class="field">
+          <label>Datum</label>
+          <input id="iDate" type="date" value="${todayISO()}">
+        </div>
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Notiz</label>
+          <input id="iNote" placeholder="optional">
+        </div>
+      </div>
+      <div id="iInfo" class="help"></div>
+      <div class="actions" style="margin-top:8px;">
+        <button onclick="bookIssue()">Ausgabe buchen</button>
+        <a class="btn sec" href="#history">Zur Historie</a>
+      </div>
+    </div>
+  `;
+  $('#iEmp').innerHTML = state.employees.filter(e=>e.active!==false)
+    .sort((a,b)=>a.lastName.localeCompare(b.lastName))
+    .map(e => `<option value="${e.id}">${escapeHtml(e.lastName + ', ' + e.firstName)}${e.personnelNo?' (#'+e.personnelNo+')':''}</option>`).join('');
+  $('#iArt').innerHTML = state.articles.filter(a=>a.active!==false)
+    .sort((a,b)=>a.internalName.localeCompare(b.internalName))
+    .map(a => `<option value="${a.id}">${escapeHtml(a.internalName)}${a.size?' · '+a.size:''}${a.variant?' · '+a.variant:''} (Bestand ${a.stock})</option>`).join('');
+  const refreshInfo = () => {
+    const a = state.articles.find(x => x.id === parseInt($('#iArt').value));
+    if (!a) { $('#iInfo').textContent = ''; return; }
+    let info = `Aktueller Bestand: ${a.stock} ${a.unit || ''}.`;
+    if (a.personalAssignment) info += ' Personenbezogene Zuordnung wird automatisch erstellt.';
+    $('#iInfo').textContent = info;
+  };
+  $('#iArt').onchange = refreshInfo;
+  refreshInfo();
+}
+
+async function bookIssue() {
+  if (!requirePermission('stock', 'Nur Lager & Admin dürfen Ausgaben buchen.')) return;
+  const eid = parseInt($('#iEmp').value);
+  const aid = parseInt($('#iArt').value);
+  const qty = parseInt($('#iQty').value);
+  const date = $('#iDate').value || todayISO();
+  const note = $('#iNote').value.trim();
+  if (!eid || !aid || !qty || qty <= 0) { toast('Bitte alle Pflichtfelder ausfüllen.', 'error'); return; }
+  const art = state.articles.find(a => a.id === aid);
+  if (!art) return;
+  if (qty > art.stock) {
+    if (!await confirmDialog(`Bestand reicht nicht (vorhanden: ${art.stock}). Trotzdem buchen?`)) return;
+  }
+  art.stock -= qty;
+  const mov = {
+    id: nextId(),
+    articleId: aid,
+    type: 'ausgabe',
+    quantity: -qty,
+    employeeId: eid,
+    importLineId: null,
+    unitPrice: art.lastPurchasePrice,
+    note: note || null,
+    occurredAt: date
+  };
+  state.movements.push(mov);
+  if (art.personalAssignment) {
+    state.assignments.push({
+      id: nextId(),
+      employeeId: eid,
+      articleId: aid,
+      quantity: qty,
+      issuedAt: date,
+      returnedAt: null,
+      condition: null,
+      replacementReason: null,
+      issueMovementId: mov.id,
+      returnMovementId: null
+    });
+  }
+  audit('ISSUE', 'article', aid, {stock: art.stock + qty}, {stock: art.stock, qty, employeeId: eid});
+  persist();
+  toast('Ausgabe gebucht.', 'success');
+  navigate('history');
+}
+
+/* ---------- Historie ---------- */
+function renderHistory() {
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="toolbar">
+      <select id="hEmp"><option value="">Alle Mitarbeiter</option>${state.employees.map(e => `<option value="${e.id}">${escapeHtml(e.lastName+', '+e.firstName)}</option>`).join('')}</select>
+      <select id="hArt"><option value="">Alle Artikel</option>${state.articles.map(a => `<option value="${a.id}">${escapeHtml(a.internalName)}${a.size?' · '+a.size:''}</option>`).join('')}</select>
+      <select id="hType"><option value="">Alle Typen</option>${Object.entries(MOVEMENT_TYPES).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <input type="date" id="hFrom" placeholder="Von">
+      <input type="date" id="hTo" placeholder="Bis">
+    </div>
+    <div class="card scroll-x">
+      <table id="hTable"></table>
+    </div>
+  `;
+  const refresh = () => {
+    const eid = parseInt($('#hEmp').value) || null;
+    const aid = parseInt($('#hArt').value) || null;
+    const type = $('#hType').value;
+    const from = $('#hFrom').value;
+    const to = $('#hTo').value;
+    const rows = state.movements
+      .filter(m => !eid || m.employeeId === eid)
+      .filter(m => !aid || m.articleId === aid)
+      .filter(m => !type || m.type === type)
+      .filter(m => !from || m.occurredAt >= from)
+      .filter(m => !to || m.occurredAt <= to)
+      .sort((a,b) => (b.occurredAt+String(b.id)).localeCompare(a.occurredAt+String(a.id)));
+    $('#hTable').innerHTML = `
+      <thead>
+        <tr><th>Datum</th><th>Typ</th><th>Artikel</th><th>Mitarbeiter</th><th class="num">Menge</th><th>Notiz</th></tr>
+      </thead>
+      <tbody>
+        ${rows.length === 0 ? '<tr><td colspan="6"><div class="empty"><div class="empty-ico">📋</div><div>Keine Bewegungen</div></div></td></tr>' : rows.map(m => {
+          const art = state.articles.find(a => a.id === m.articleId);
+          const emp = state.employees.find(e => e.id === m.employeeId);
+          const typePill = { eingang:'green', ausgabe:'blue', rueckgabe:'gray', defekt:'red', korrektur:'yellow' }[m.type];
+          return `<tr>
+            <td>${fmtDate(m.occurredAt)}</td>
+            <td><span class="pill ${typePill}">${MOVEMENT_TYPES[m.type]}</span></td>
+            <td>${art ? `<a href="#article/${art.id}">${escapeHtml(art.internalName)}</a>${art.size?' · '+escapeHtml(art.size):''}` : '—'}</td>
+            <td>${emp ? `<a href="#employee/${emp.id}">${escapeHtml(emp.lastName+', '+emp.firstName)}</a>` : '—'}</td>
+            <td class="num">${m.quantity > 0 ? '+'+m.quantity : m.quantity}</td>
+            <td>${escapeHtml(m.note || '')}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    `;
+  };
+  ['#hEmp','#hArt','#hType','#hFrom','#hTo'].forEach(s => $(s).onchange = refresh);
+  refresh();
+}
+
+/* ---------- Mitarbeiter ---------- */
+function renderEmployees() {
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="eSearch" placeholder="Suche …" style="max-width:280px;">
+      <div class="spacer"></div>
+      <button onclick="editEmployee()">+ Neuer Mitarbeiter</button>
+    </div>
+    <div class="card scroll-x"><table id="eTable"></table></div>
+  `;
+  const refresh = () => {
+    const q = $('#eSearch').value.toLowerCase();
+    const rows = state.employees
+      .filter(e => e.active !== false)
+      .filter(e => !q || (e.firstName + ' ' + e.lastName + ' ' + (e.personnelNo||'') + ' ' + (e.department||'')).toLowerCase().includes(q))
+      .sort((a,b) => a.lastName.localeCompare(b.lastName));
+    $('#eTable').innerHTML = `
+      <thead><tr><th>Name</th><th>Pers.-Nr.</th><th>Abteilung</th><th>Konfektion</th><th>Schuhe</th><th>Aktionen</th></tr></thead>
+      <tbody>
+        ${rows.length === 0 ? '<tr><td colspan="6"><div class="empty"><div class="empty-ico">👤</div><div>Keine Mitarbeiter</div></div></td></tr>' : rows.map(e => `
+          <tr>
+            <td><a href="#employee/${e.id}">${escapeHtml(e.lastName + ', ' + e.firstName)}</a></td>
+            <td>${escapeHtml(e.personnelNo || '—')}</td>
+            <td>${escapeHtml(e.department || '—')}</td>
+            <td>${escapeHtml(e.clothingSize || '—')}</td>
+            <td>${escapeHtml(e.shoeSize || '—')}</td>
+            <td><button class="ghost small" onclick="editEmployee(${e.id})">bearbeiten</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+  };
+  $('#eSearch').oninput = refresh;
+  refresh();
+}
+
+function editEmployee(id) {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Mitarbeiter bearbeiten.')) return;
+  const emp = id ? state.employees.find(e => e.id === id) : { firstName:'', lastName:'', personnelNo:'', department:'', clothingSize:'', shoeSize:'' };
+  if (!emp) return;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="grid-2">
+      <div class="field"><label>Vorname</label><input id="fn" value="${escapeHtml(emp.firstName)}"></div>
+      <div class="field"><label>Nachname</label><input id="ln" value="${escapeHtml(emp.lastName)}"></div>
+      <div class="field"><label>Personalnummer</label><input id="pn" value="${escapeHtml(emp.personnelNo||'')}"></div>
+      <div class="field"><label>Abteilung</label><input id="dp" value="${escapeHtml(emp.department||'')}"></div>
+      <div class="field"><label>Konfektionsgröße</label><input id="cs" value="${escapeHtml(emp.clothingSize||'')}"></div>
+      <div class="field"><label>Schuhgröße</label><input id="ss" value="${escapeHtml(emp.shoeSize||'')}"></div>
+    </div>
+  `;
+  modal({
+    title: id ? 'Mitarbeiter bearbeiten' : 'Neuer Mitarbeiter',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind: 'sec', value: false },
+      { label: 'Speichern', value: true }
+    ]
+  }).then(ok => {
+    if (!ok) return;
+    const data = {
+      firstName: div.querySelector('#fn').value.trim(),
+      lastName: div.querySelector('#ln').value.trim(),
+      personnelNo: div.querySelector('#pn').value.trim() || null,
+      department: div.querySelector('#dp').value.trim() || null,
+      clothingSize: div.querySelector('#cs').value.trim() || null,
+      shoeSize: div.querySelector('#ss').value.trim() || null,
+      active: true
+    };
+    if (!data.firstName || !data.lastName) { toast('Vor- und Nachname sind Pflicht.', 'error'); return; }
+    if (id) { audit('UPDATE_EMPLOYEE', 'employee', id, {firstName:emp.firstName,lastName:emp.lastName}, data); Object.assign(emp, data); }
+    else { const ne = { id: nextId(), ...data }; audit('CREATE_EMPLOYEE', 'employee', ne.id, null, data); state.employees.push(ne); }
+    persist();
+    toast('Gespeichert.', 'success');
+    navigate('employees');
+  });
+}
+
+function renderEmployeeDetail(idStr) {
+  const id = parseInt(idStr);
+  const emp = state.employees.find(e => e.id === id);
+  if (!emp) { $('#view').innerHTML = '<div class="empty">Mitarbeiter nicht gefunden.</div>'; return; }
+  const movs = state.movements.filter(m => m.employeeId === id).sort((a,b) => (b.occurredAt+String(b.id)).localeCompare(a.occurredAt+String(a.id)));
+  const openAssign = state.assignments.filter(a => a.employeeId === id && !a.returnedAt);
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="card">
+      <div class="grid-3">
+        <div><label>Name</label><div><strong>${escapeHtml(emp.lastName + ', ' + emp.firstName)}</strong></div></div>
+        <div><label>Personalnummer</label><div>${escapeHtml(emp.personnelNo || '—')}</div></div>
+        <div><label>Abteilung</label><div>${escapeHtml(emp.department || '—')}</div></div>
+        <div><label>Konfektion</label><div>${escapeHtml(emp.clothingSize || '—')}</div></div>
+        <div><label>Schuhgröße</label><div>${escapeHtml(emp.shoeSize || '—')}</div></div>
+      </div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="sec" onclick="editEmployee(${emp.id})">Bearbeiten</button>
+        <a class="btn" href="#issue">Neue Ausgabe</a>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Aktuell ausgegeben (offene Zuordnungen)</h2>
+      ${openAssign.length === 0 ? '<div class="empty">Keine offenen Zuordnungen.</div>' : `
+        <table>
+          <thead><tr><th>Artikel</th><th>Menge</th><th>Ausgegeben am</th><th></th></tr></thead>
+          <tbody>
+            ${openAssign.map(a => {
+              const art = state.articles.find(x => x.id === a.articleId);
+              return `<tr>
+                <td>${art ? escapeHtml(art.internalName) : '—'}${art && art.size ? ' · '+art.size : ''}</td>
+                <td>${a.quantity}</td>
+                <td>${fmtDate(a.issuedAt)}</td>
+                <td><button class="sec small" onclick="returnAssignment(${a.id})">Rückgabe buchen</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Bewegungshistorie (${movs.length})</h2>
+      ${movs.length === 0 ? '<div class="empty">Noch keine Bewegungen.</div>' : `
+        <table>
+          <thead><tr><th>Datum</th><th>Typ</th><th>Artikel</th><th class="num">Menge</th><th>Notiz</th></tr></thead>
+          <tbody>
+            ${movs.map(m => {
+              const art = state.articles.find(a => a.id === m.articleId);
+              const typePill = { eingang:'green', ausgabe:'blue', rueckgabe:'gray', defekt:'red', korrektur:'yellow' }[m.type];
+              return `<tr>
+                <td>${fmtDate(m.occurredAt)}</td>
+                <td><span class="pill ${typePill}">${MOVEMENT_TYPES[m.type]}</span></td>
+                <td>${art ? escapeHtml(art.internalName) : '—'}${art && art.size ? ' · '+art.size:''}</td>
+                <td class="num">${m.quantity > 0 ? '+'+m.quantity : m.quantity}</td>
+                <td>${escapeHtml(m.note||'')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+}
+
+async function returnAssignment(aid) {
+  const a = state.assignments.find(x => x.id === aid);
+  if (!a) return;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="grid-2">
+      <div class="field"><label>Datum</label><input id="rd" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Zustand</label><select id="rc"><option value="gut">gut</option><option value="abgenutzt">abgenutzt</option><option value="defekt">defekt</option></select></div>
+    </div>
+    <div class="field"><label>Grund (optional)</label><input id="rr" placeholder="z. B. verschlissen, neue Größe …"></div>
+  `;
+  const ok = await modal({
+    title: 'Rückgabe buchen',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind:'sec', value: false },
+      { label: 'Buchen', value: true }
+    ]
+  });
+  if (!ok) return;
+  const date = div.querySelector('#rd').value || todayISO();
+  const cond = div.querySelector('#rc').value;
+  const reason = div.querySelector('#rr').value.trim() || null;
+  const art = state.articles.find(x => x.id === a.articleId);
+  const isDefect = cond === 'defekt';
+  const mov = {
+    id: nextId(),
+    articleId: a.articleId,
+    type: isDefect ? 'defekt' : 'rueckgabe',
+    quantity: isDefect ? -a.quantity : a.quantity,
+    employeeId: a.employeeId,
+    importLineId: null,
+    unitPrice: art ? art.lastPurchasePrice : null,
+    note: `Rückgabe (${cond})${reason ? ' · ' + reason : ''}`,
+    occurredAt: date
+  };
+  state.movements.push(mov);
+  if (art && !isDefect) art.stock += a.quantity; // bei Defekt geht Bestand verloren
+  a.returnedAt = date;
+  a.condition = cond;
+  a.replacementReason = reason;
+  a.returnMovementId = mov.id;
+  persist();
+  toast('Rückgabe gebucht.', 'success');
+  navigate('employee/' + a.employeeId);
+}
+
+/* ---------- Artikel ---------- */
+function renderArticlesList() {
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="aSearch" placeholder="Suche …" style="max-width:280px;">
+      <select id="aCat"><option value="">Alle Kategorien</option>${CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}</select>
+      <div class="spacer"></div>
+      <button onclick="editArticle()">+ Neuer Artikel</button>
+    </div>
+    <div class="card scroll-x"><table id="aTable"></table></div>
+  `;
+  const refresh = () => {
+    const q = $('#aSearch').value.toLowerCase();
+    const c = $('#aCat').value;
+    const rows = state.articles
+      .filter(a => a.active !== false)
+      .filter(a => !c || a.category === c)
+      .filter(a => !q || (a.internalName + ' ' + (a.size||'') + ' ' + (a.variant||'')).toLowerCase().includes(q))
+      .sort((a,b) => a.internalName.localeCompare(b.internalName));
+    $('#aTable').innerHTML = `
+      <thead><tr><th>Bezeichnung</th><th>Kategorie</th><th>Größe</th><th>Variante</th><th class="num">Bestand</th><th class="num">Min</th><th>Aktionen</th></tr></thead>
+      <tbody>
+        ${rows.length === 0 ? '<tr><td colspan="7"><div class="empty"><div class="empty-ico">🏷️</div><div>Keine Artikel</div></div></td></tr>' : rows.map(a => {
+          const ci = catInfo(a.category);
+          const low = a.minStock > 0 && a.stock <= a.minStock;
+          return `
+          <tr class="${low ? 'row-danger' : ''}">
+            <td><a href="#article/${a.id}">${escapeHtml(a.internalName)}</a></td>
+            <td>${ci.icon} ${escapeHtml(ci.label)}</td>
+            <td>${escapeHtml(a.size||'—')}</td>
+            <td>${escapeHtml(a.variant||'—')}</td>
+            <td class="num"><span class="pill ${low?'red':'green'}">${a.stock}</span></td>
+            <td class="num">${a.minStock||0}</td>
+            <td><button class="ghost small" onclick="editArticle(${a.id})">bearbeiten</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    `;
+  };
+  $('#aSearch').oninput = refresh;
+  $('#aCat').onchange = refresh;
+  refresh();
+}
+
+function editArticle(id) {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel bearbeiten.')) return;
+  const art = id ? state.articles.find(a => a.id === id) : {
+    internalName:'', category:'arbeitskleidung', size:'', variant:'', unit:'Stück',
+    stock:0, minStock:0, location:'', lastPurchasePrice:null, personalAssignment:true, active:true
+  };
+  if (!art) return;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="field"><label>Interne Bezeichnung *</label><input id="iname" value="${escapeHtml(art.internalName)}"></div>
+    <div class="grid-2">
+      <div class="field"><label>Kategorie</label><select id="icat">${CATEGORIES.map(c => `<option value="${c.id}" ${c.id===art.category?'selected':''}>${c.label}</option>`).join('')}</select></div>
+      <div class="field"><label>Einheit</label><select id="iunit">${UNITS.map(u => `<option ${u===art.unit?'selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="field"><label>Größe</label><input id="isize" value="${escapeHtml(art.size||'')}"></div>
+      <div class="field"><label>Variante / Farbe</label><input id="ivar" value="${escapeHtml(art.variant||'')}"></div>
+      <div class="field"><label>Lagerort</label><input id="iloc" value="${escapeHtml(art.location||'')}"></div>
+      <div class="field"><label>Mindestbestand</label><input id="imin" type="number" min="0" value="${art.minStock||0}"></div>
+      ${id ? '' : `<div class="field"><label>Anfangsbestand</label><input id="istart" type="number" min="0" value="0"></div>`}
+      <div class="field"><label>Letzter EK (€)</label><input id="iprice" value="${art.lastPurchasePrice ? (art.lastPurchasePrice/100).toFixed(2).replace('.', ',') : ''}"></div>
+    </div>
+    <div class="field" style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="ipers" ${art.personalAssignment?'checked':''} style="width:auto;">
+      <label for="ipers" style="margin:0;">Personenbezogene Zuordnung (Arbeitskleidung etc.)</label>
+    </div>
+  `;
+  modal({
+    title: id ? 'Artikel bearbeiten' : 'Neuer Artikel',
+    body: div,
+    footer: id ? [
+      { label: 'Löschen', kind: 'danger', value: 'del' },
+      { label: 'Abbrechen', kind:'sec', value: false },
+      { label: 'Speichern', value: true }
+    ] : [
+      { label: 'Abbrechen', kind:'sec', value: false },
+      { label: 'Anlegen', value: true }
+    ]
+  }).then(async (res) => {
+    if (!res) return;
+    if (res === 'del') {
+      if (!await confirmDialog('Artikel wirklich deaktivieren?')) return;
+      art.active = false; persist(); toast('Deaktiviert.'); navigate('articles'); return;
+    }
+    const data = {
+      internalName: div.querySelector('#iname').value.trim(),
+      category: div.querySelector('#icat').value,
+      unit: div.querySelector('#iunit').value,
+      size: div.querySelector('#isize').value.trim() || null,
+      variant: div.querySelector('#ivar').value.trim() || null,
+      location: div.querySelector('#iloc').value.trim() || null,
+      minStock: parseInt(div.querySelector('#imin').value) || 0,
+      lastPurchasePrice: parseGermanNumber(div.querySelector('#iprice').value) != null ? toCents(parseGermanNumber(div.querySelector('#iprice').value)) : null,
+      personalAssignment: div.querySelector('#ipers').checked,
+      active: true
+    };
+    if (!data.internalName) { toast('Bezeichnung ist Pflicht.', 'error'); return; }
+    if (id) Object.assign(art, data);
+    else {
+      const start = parseInt(div.querySelector('#istart').value) || 0;
+      const newArt = { id: nextId(), ...data, stock: start };
+      state.articles.push(newArt);
+      if (start > 0) {
+        state.movements.push({
+          id: nextId(), articleId: newArt.id, type: 'eingang',
+          quantity: start, employeeId: null, importLineId: null,
+          unitPrice: data.lastPurchasePrice, note: 'Anfangsbestand',
+          occurredAt: todayISO()
+        });
+      }
+    }
+    persist();
+    toast('Gespeichert.', 'success');
+    navigate('articles');
+  });
+}
+
+function renderArticleDetail(idStr) {
+  const id = parseInt(idStr);
+  const art = state.articles.find(a => a.id === id);
+  if (!art) { $('#view').innerHTML = '<div class="empty">Artikel nicht gefunden.</div>'; return; }
+  const movs = state.movements.filter(m => m.articleId === id).sort((a,b) => (b.occurredAt+String(b.id)).localeCompare(a.occurredAt+String(a.id)));
+  const aliases = state.aliases.filter(a => a.articleId === id);
+  const v = $('#view');
+  const low = art.minStock > 0 && art.stock <= art.minStock;
+  v.innerHTML = `
+    <div class="card">
+      <div class="grid-3">
+        <div><label>Bezeichnung</label><div><strong>${escapeHtml(art.internalName)}</strong></div></div>
+        <div><label>Kategorie</label><div>${catInfo(art.category).icon} ${escapeHtml(catInfo(art.category).label)}</div></div>
+        <div><label>Bestand</label><div><span class="pill ${low?'red':'green'}">${art.stock} ${escapeHtml(art.unit||'')}</span> · Min ${art.minStock||0}</div></div>
+        <div><label>Größe</label><div>${escapeHtml(art.size||'—')}</div></div>
+        <div><label>Variante</label><div>${escapeHtml(art.variant||'—')}</div></div>
+        <div><label>Lagerort</label><div>${escapeHtml(art.location||'—')}</div></div>
+        <div><label>Letzter EK</label><div>${fmtMoney(art.lastPurchasePrice)}</div></div>
+        <div><label>Personenbezogen?</label><div>${art.personalAssignment ? 'Ja' : 'Nein'}</div></div>
+      </div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="sec" onclick="editArticle(${art.id})">Bearbeiten</button>
+        <a class="btn" href="#issue">Ausgabe buchen</a>
+        <a class="btn sec" href="#manual-receipt">Wareneingang buchen</a>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Lieferanten-Aliase (${aliases.length})</h2>
+      ${aliases.length === 0 ? '<div class="empty">Noch keine Aliase. Beim ersten Import wird gelernt.</div>' : `
+        <table>
+          <thead><tr><th>Lieferant</th><th>SKU</th><th>Label</th><th>Größe</th><th>Variante</th></tr></thead>
+          <tbody>
+            ${aliases.map(a => {
+              const sup = state.suppliers.find(s => s.id === a.supplierId);
+              return `<tr>
+                <td>${sup ? escapeHtml(sup.name) : '—'}</td>
+                <td>${escapeHtml(a.supplierSku||'—')}</td>
+                <td>${escapeHtml(a.supplierLabel||'—')}</td>
+                <td>${escapeHtml(a.matchSize||'—')}</td>
+                <td>${escapeHtml(a.matchVariant||'—')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Bewegungen (${movs.length})</h2>
+      ${movs.length === 0 ? '<div class="empty">Noch keine Bewegungen.</div>' : `
+        <table>
+          <thead><tr><th>Datum</th><th>Typ</th><th>Mitarbeiter</th><th class="num">Menge</th><th>EK</th><th>Notiz</th></tr></thead>
+          <tbody>
+            ${movs.map(m => {
+              const emp = state.employees.find(e => e.id === m.employeeId);
+              const typePill = { eingang:'green', ausgabe:'blue', rueckgabe:'gray', defekt:'red', korrektur:'yellow' }[m.type];
+              return `<tr>
+                <td>${fmtDate(m.occurredAt)}</td>
+                <td><span class="pill ${typePill}">${MOVEMENT_TYPES[m.type]}</span></td>
+                <td>${emp ? escapeHtml(emp.lastName+', '+emp.firstName) : '—'}</td>
+                <td class="num">${m.quantity > 0 ? '+'+m.quantity : m.quantity}</td>
+                <td>${fmtMoney(m.unitPrice)}</td>
+                <td>${escapeHtml(m.note||'')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+}
+
+/* ---------- Lieferanten ---------- */
+function renderSuppliers() {
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="sSearch" placeholder="Suche …" style="max-width:280px;">
+      <div class="spacer"></div>
+      <button onclick="editSupplier()">+ Neuer Lieferant</button>
+    </div>
+    <div class="card scroll-x"><table id="sTable"></table></div>
+  `;
+  const refresh = () => {
+    const q = $('#sSearch').value.toLowerCase();
+    const rows = state.suppliers
+      .filter(s => !q || (s.name + ' ' + (s.address||'')).toLowerCase().includes(q))
+      .sort((a,b) => a.name.localeCompare(b.name));
+    $('#sTable').innerHTML = `
+      <thead><tr><th>Name</th><th>Adresse</th><th>USt-Id</th><th>Aktionen</th></tr></thead>
+      <tbody>
+        ${rows.length === 0 ? '<tr><td colspan="4"><div class="empty"><div class="empty-ico">🚚</div><div>Keine Lieferanten</div></div></td></tr>' : rows.map(s => `
+          <tr>
+            <td>${escapeHtml(s.name)}</td>
+            <td>${escapeHtml(s.address||'—')}</td>
+            <td>${escapeHtml(s.taxId||'—')}</td>
+            <td><button class="ghost small" onclick="editSupplier(${s.id})">bearbeiten</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+  };
+  $('#sSearch').oninput = refresh;
+  refresh();
+}
+
+function editSupplier(id) {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Lieferanten bearbeiten.')) return;
+  const sup = id ? state.suppliers.find(s => s.id === id) : { name:'', address:'', taxId:'', notes:'' };
+  if (!sup) return;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="field"><label>Name</label><input id="sname" value="${escapeHtml(sup.name)}"></div>
+    <div class="field"><label>Adresse</label><input id="saddr" value="${escapeHtml(sup.address||'')}"></div>
+    <div class="field"><label>USt-IdNr.</label><input id="stax" value="${escapeHtml(sup.taxId||'')}"></div>
+    <div class="field"><label>Notizen</label><textarea id="snotes" rows="3">${escapeHtml(sup.notes||'')}</textarea></div>
+  `;
+  modal({
+    title: id ? 'Lieferant bearbeiten' : 'Neuer Lieferant',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind:'sec', value: false },
+      { label: 'Speichern', value: true }
+    ]
+  }).then(ok => {
+    if (!ok) return;
+    const data = {
+      name: div.querySelector('#sname').value.trim(),
+      address: div.querySelector('#saddr').value.trim() || null,
+      taxId: div.querySelector('#stax').value.trim() || null,
+      notes: div.querySelector('#snotes').value.trim() || null
+    };
+    if (!data.name) { toast('Name ist Pflicht.', 'error'); return; }
+    if (id) Object.assign(sup, data);
+    else state.suppliers.push({ id: nextId(), ...data });
+    persist();
+    toast('Gespeichert.', 'success');
+    navigate('suppliers');
+  });
+}
+
+/* ---------- Daten verwalten ---------- */
+function renderDataView() {
+  const v = $('#view');
+  const stats = {
+    suppliers: state.suppliers.length,
+    articles: state.articles.length,
+    aliases: state.aliases.length,
+    employees: state.employees.length,
+    imports: state.imports.length,
+    movements: state.movements.length,
+    assignments: state.assignments.length
+  };
+  v.innerHTML = `
+    <div class="card">
+      <h2>Datenbank-Status</h2>
+      <table style="max-width:420px;">
+        ${Object.entries(stats).map(([k,v]) => `<tr><td>${k}</td><td class="num">${v}</td></tr>`).join('')}
+      </table>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2>Backup &amp; Import</h2>
+      <p class="lead">Alle Daten werden im Browser-Speicher gehalten. Für ein Backup als JSON exportieren und sicher ablegen (z. B. ins Lagerbestand-Verzeichnis).</p>
+      <div class="actions">
+        <button onclick="exportData()">Export als JSON</button>
+        <button class="sec" onclick="document.getElementById('importJson').click()">JSON importieren</button>
+        <input type="file" id="importJson" accept=".json,application/json" style="display:none;" onchange="importData(this)">
+        <button class="danger" onclick="resetAllData()">Alles löschen</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2>Demo</h2>
+      <p class="lead">Setzt das System auf einen Beispielzustand mit Mitarbeitern, Artikeln und der Bandyshirt-Rechnung als offenem Import.</p>
+      <button class="sec" onclick="loadDemoData()">Demo-Daten laden</button>
+    </div>
+  `;
+}
+
+function exportData() {
+  if (!requirePermission('export', 'Nur Office & Admin dürfen Daten exportieren.')) return;
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'lagerverwaltung-' + todayISO() + '.json';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+async function importData(input) {
+  if (!requirePermission('admin', 'Nur Admins dürfen Daten importieren.')) { input.value=''; return; }
+  const f = input.files[0]; if (!f) return;
+  if (!await confirmDialog('Aktuelle Daten überschreiben?')) { input.value=''; return; }
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const obj = JSON.parse(r.result);
+      state = obj; persist(); handleRoute();
+      toast('Daten importiert.', 'success');
+    } catch (e) {
+      toast('Ungültige Datei.', 'error');
+    }
+  };
+  r.readAsText(f);
+  input.value = '';
+}
+
+async function resetAllData() {
+  if (!requirePermission('admin', 'Nur Admins dürfen alle Daten löschen.')) return;
+  if (!await confirmDialog('Wirklich alle Daten löschen?')) return;
+  audit('RESET_ALL', 'system', null, {records: state.movements.length}, null);
+  state = defaultData();
+  persist(); handleRoute();
+  toast('Alle Daten gelöscht.');
+}
+
+/* =========================================================================
+   DEMO-DATEN
+   ========================================================================= */
+function loadDemoData() {
+  if (!requirePermission('admin', 'Nur Admins dürfen Demo-Daten laden.')) return;
+  state = defaultData();
+  // Lieferanten
+  const supBandy = { id: nextId(), name: 'Bandyshirt GmbH', address: 'Rüppurerstr. 1, 76137 Karlsruhe', taxId: 'DE815700651' };
+  const supMewa = { id: nextId(), name: 'MEWA AG', address: 'Hermann-Gebauer-Str. 1, 65232 Taunusstein' };
+  state.suppliers.push(supBandy, supMewa);
+  // Artikel (ohne T-Shirts: die werden später aus dem Import angelegt, um den Workflow zu zeigen)
+  state.articles.push(
+    { id: nextId(), internalName: 'Schutzhandschuh Nitril', category: 'handschuhe', size: 'L', variant: null, unit: 'Paar', stock: 24, minStock: 30, location: 'Regal A1', lastPurchasePrice: 89, personalAssignment: false, active: true },
+    { id: nextId(), internalName: 'Schutzhandschuh Nitril', category: 'handschuhe', size: 'XL', variant: null, unit: 'Paar', stock: 18, minStock: 20, location: 'Regal A1', lastPurchasePrice: 89, personalAssignment: false, active: true },
+    { id: nextId(), internalName: 'Sicherheitsschuh S3', category: 'sicherheitsschuhe', size: '42', variant: 'schwarz', unit: 'Paar', stock: 4, minStock: 2, location: 'Regal B2', lastPurchasePrice: 7990, personalAssignment: true, active: true },
+    { id: nextId(), internalName: 'Schutzbrille klar', category: 'schutzbrille', size: null, variant: null, unit: 'Stück', stock: 12, minStock: 5, location: 'Regal C1', lastPurchasePrice: 450, personalAssignment: false, active: true }
+  );
+  // Mitarbeiter
+  state.employees.push(
+    { id: nextId(), firstName: 'Marcin', lastName: 'Panus', personnelNo: '001', department: 'Werkstatt', clothingSize: 'L', shoeSize: '43', active: true },
+    { id: nextId(), firstName: 'Andrzej', lastName: 'Kowalski', personnelNo: '002', department: 'Lager', clothingSize: 'XL', shoeSize: '44', active: true },
+    { id: nextId(), firstName: 'Anna', lastName: 'Schmidt', personnelNo: '003', department: 'Büro', clothingSize: 'M', shoeSize: '38', active: true }
+  );
+  // Vergangene Bewegungen
+  const handL = state.articles.find(a => a.internalName === 'Schutzhandschuh Nitril' && a.size === 'L');
+  state.movements.push(
+    { id: nextId(), articleId: handL.id, type: 'eingang', quantity: 50, employeeId: null, importLineId: null, unitPrice: 89, note: 'Anfangsbestand', occurredAt: '2026-04-01' },
+    { id: nextId(), articleId: handL.id, type: 'ausgabe', quantity: -2, employeeId: state.employees[1].id, importLineId: null, unitPrice: 89, note: null, occurredAt: '2026-04-15' },
+    { id: nextId(), articleId: handL.id, type: 'ausgabe', quantity: -2, employeeId: state.employees[1].id, importLineId: null, unitPrice: 89, note: null, occurredAt: '2026-04-22' },
+    { id: nextId(), articleId: handL.id, type: 'ausgabe', quantity: -2, employeeId: state.employees[1].id, importLineId: null, unitPrice: 89, note: null, occurredAt: '2026-04-29' }
+  );
+  handL.stock = 50 - 2 - 2 - 2; // 44 → reduzieren wir noch weiter mit nem Eintrag
+  handL.stock = 24;
+  // Bandyshirt-Import (offen)
+  const importId = nextId();
+  state.imports.push({
+    id: importId,
+    supplierId: supBandy.id,
+    supplierName: 'Bandyshirt GmbH',
+    invoiceNo: 'BSi042600160397',
+    invoiceDate: '2026-04-30',
+    rawText: '',
+    status: 'parsed',
+    createdAt: todayISO()
+  });
+  ['M','L','XXL'].forEach((size, i) => {
+    state.importLines.push({
+      id: nextId(),
+      importId,
+      pos: i+1,
+      rawLabel: '#E190 T-Shirt',
+      rawSize: size,
+      rawVariant: 'Schwarz',
+      quantity: size === 'XXL' ? 5 : 7,
+      unitPrice: 3189,
+      totalPrice: size === 'XXL' ? 13399 : 18759,
+      matchStatus: 'needs_review',
+      matchScore: 0,
+      matchedArticleId: null,
+      note: 'Kein Treffer'
+    });
+  });
+  persist();
+  toast('Demo-Daten geladen. Schau dir die Prüfqueue an.', 'success');
+  navigate('dashboard');
+}
+
+/* =========================================================================
+   EINMALIGE DATEN-INITIALISIERUNG (Rechnung BSi042600160397 + Mitarbeiter)
+   ========================================================================= */
+function initOnce() {
+  // ── Mitarbeiter (nur einfügen wenn nicht vorhanden) ──
+  const newEmployees = [
+    { firstName: 'Francesco', lastName: '' },
+    { firstName: 'Maurice',   lastName: '' },
+    { firstName: 'Kamil',     lastName: '' },
+    { firstName: 'Kevin',     lastName: '' },
+    { firstName: 'Wojtek',    lastName: '' },
+    { firstName: 'Patricia',  lastName: '' },
+    { firstName: 'Zbyszek',   lastName: '' },
+  ];
+  let empAdded = 0;
+  for (const e of newEmployees) {
+    const exists = state.employees.find(x => x.firstName.toLowerCase() === e.firstName.toLowerCase());
+    if (!exists) {
+      state.employees.push({
+        id: nextId(), firstName: e.firstName, lastName: e.lastName,
+        personnelNo: null, department: null, clothingSize: null, shoeSize: null, active: true
+      });
+      empAdded++;
+    }
+  }
+
+  // ── Lieferant Bandyshirt GmbH ──
+  let supplier = state.suppliers.find(s => s.name.toLowerCase().includes('bandyshirt'));
+  if (!supplier) {
+    supplier = {
+      id: nextId(), name: 'Bandyshirt GmbH',
+      address: 'Rüppurerstr. 1, 76137 Karlsruhe',
+      taxId: 'DE815700651', notes: null
+    };
+    state.suppliers.push(supplier);
+  }
+
+  // ── Import BSi042600160397 (nur einmalig anlegen) ──
+  const existingImport = state.imports.find(i => i.invoiceNo === 'BSi042600160397');
+  if (!existingImport) {
+    const importId = nextId();
+    state.imports.push({
+      id: importId,
+      supplierId: supplier.id,
+      supplierName: 'Bandyshirt GmbH',
+      invoiceNo: 'BSi042600160397',
+      invoiceDate: '2026-04-30',
+      rawText: '',
+      status: 'parsed',
+      createdAt: todayISO()
+    });
+    // Positionen: #E190 T-Shirt Schwarz M×7, L×7, XXL×5, à 31,89 € netto
+    const lines = [
+      { pos: 1, size: 'M',   qty: 7 },
+      { pos: 2, size: 'L',   qty: 7 },
+      { pos: 3, size: 'XXL', qty: 5 },
+    ];
+    for (const l of lines) {
+      state.importLines.push({
+        id: nextId(),
+        importId,
+        pos: l.pos,
+        rawLabel: '#E190 T-Shirt',
+        rawSize: l.size,
+        rawVariant: 'Schwarz',
+        quantity: l.qty,
+        unitPrice: 3189,       // 31,89 € netto in Cent
+        totalPrice: l.qty * 3189,
+        matchStatus: 'needs_review',
+        matchScore: 0,
+        matchedArticleId: null,
+        note: 'Aus PDF-Rechnung BSi042600160397'
+      });
+    }
+    saveData();
+    console.log(`[initOnce] Import BSi042600160397 angelegt. ${empAdded} Mitarbeiter hinzugefügt.`);
+  } else if (empAdded > 0) {
+    saveData();
+    console.log(`[initOnce] ${empAdded} Mitarbeiter hinzugefügt.`);
+  }
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+initOnce();
+handleRoute();
+renderMenu();
+</script>
+</body>
+</html>
