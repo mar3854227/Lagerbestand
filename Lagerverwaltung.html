@@ -1670,6 +1670,22 @@ function articleDisplayName(article) {
   return `${article.internalName || 'Artikel'}${article.size ? ' · ' + article.size : ''}${article.variant ? ' · ' + article.variant : ''}`;
 }
 
+function articleSizeCell(article) {
+  if (!article) return '—';
+  if (article.size) return escapeHtml(article.size);
+  if (article.personalAssignment) return '<span class="pill yellow">Größe fehlt</span>';
+  return '—';
+}
+
+function syncArticleAliasesWithDimensions(articleId, size, variant) {
+  state.aliases
+    .filter(alias => alias.articleId === articleId)
+    .forEach(alias => {
+      if (size && !alias.matchSize) alias.matchSize = size;
+      if (variant && !alias.matchVariant) alias.matchVariant = variant;
+    });
+}
+
 function movementUnitPrice(movement) {
   const article = state.articles.find(article => article.id === movement.articleId);
   const price = movement.unitPrice ?? article?.lastPurchasePrice ?? null;
@@ -2127,7 +2143,7 @@ function renderDashboard() {
               ${lowStock.slice(0,8).map(a => `
                 <tr class="row-danger">
                   <td><a href="#article/${a.id}">${escapeHtml(a.internalName)}</a></td>
-                  <td>${escapeHtml(a.size || '—')}</td>
+                  <td>${articleSizeCell(a)}</td>
                   <td class="num"><span class="pill red">${a.stock}</span></td>
                   <td class="num">${a.minStock}</td>
                 </tr>
@@ -2329,7 +2345,7 @@ function renderInventory() {
             <tr class="${low ? 'row-danger' : ''}">
               <td><a href="#article/${a.id}">${escapeHtml(a.internalName)}</a></td>
               <td><span title="${escapeHtml(ci.label)}">${ci.icon} ${escapeHtml(ci.label)}</span></td>
-              <td>${escapeHtml(a.size || '—')}</td>
+              <td>${articleSizeCell(a)}</td>
               <td>${escapeHtml(a.variant || '—')}</td>
               <td>${escapeHtml(a.location || '—')}</td>
               <td class="num"><span class="pill ${low ? 'red' : 'green'}">${a.stock}</span></td>
@@ -2641,7 +2657,7 @@ function renderImportReview(idStr) {
                   <td>${line.pos}</td>
                   <td>
                     <div><strong>${escapeHtml(line.rawLabel)}</strong></div>
-                    ${line.rawSize ? `<div style="font-size:12px; color:#6b7280;">Größe: ${escapeHtml(line.rawSize)}</div>` : ''}
+                    ${line.rawSize ? `<div style="font-size:12px; color:#6b7280;">Größe: ${escapeHtml(line.rawSize)}</div>` : '<div class="help"><span class="pill yellow">Größe fehlt</span></div>'}
                     ${line.rawVariant ? `<div style="font-size:12px; color:#6b7280;">Variante: ${escapeHtml(line.rawVariant)}</div>` : ''}
                   </td>
                   <td class="num">${line.quantity}</td>
@@ -2660,6 +2676,7 @@ function renderImportReview(idStr) {
                   <td>
                     <div class="actions">
                       ${line.matchStatus === 'suggest' ? `<button class="small" onclick="confirmSuggestLine(${line.id})">Vorschlag bestätigen</button>` : ''}
+                      <button class="sec small" onclick="editImportLineDetails(${line.id})">Größe/Variante</button>
                       <button class="sec small" onclick="assignArticleToLine(${line.id})">Zuordnen</button>
                       <button class="sec small" onclick="newArticleFromLine(${line.id})">Neu anlegen</button>
                     </div>
@@ -2713,6 +2730,80 @@ function confirmSuggestLine(lineId) {
   line.note = ((line.note || '') + ' · Vorschlag bestätigt').trim();
   persist();
   toast('Vorschlag bestätigt.', 'success');
+  navigate('review/' + line.importId);
+}
+
+async function editImportLineDetails(lineId) {
+  if (!requirePermission('import', 'Nur Office & Admin dürfen Import-Positionen bearbeiten.')) return;
+  const line = state.importLines.find(l => l.id === lineId);
+  if (!line) return;
+  const imp = state.imports.find(item => item.id === line.importId);
+  const matchedArticle = state.articles.find(article => article.id === line.matchedArticleId) || null;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <p class="help" style="margin-bottom:12px;">Wenn die Rechnung keine Größe mitliefert, kannst du sie hier manuell ergänzen. Bei zugeordneten Artikeln ohne Größe wird die Größe optional direkt im Artikelstamm nachgetragen.</p>
+    <div class="field"><label>Rechnungsposition</label><div class="subtle">${escapeHtml(line.rawLabel || '—')}</div></div>
+    <div class="grid-2">
+      <div class="field"><label>Größe manuell</label><input id="lineSize" value="${escapeHtml(line.rawSize || '')}" placeholder="z. B. 42, 43, M, XL"></div>
+      <div class="field"><label>Variante / Farbe</label><input id="lineVariant" value="${escapeHtml(line.rawVariant || '')}" placeholder="z. B. schwarz"></div>
+    </div>
+    ${matchedArticle ? `
+      <label style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <input type="checkbox" id="updateArticleSize" checked style="width:auto;">
+        Zugeordneten Artikel aktualisieren, wenn Größe/Variante dort fehlt
+      </label>
+      <div class="help">Aktuell zugeordnet: ${escapeHtml(articleDisplayName(matchedArticle))}</div>
+    ` : '<div class="help">Noch kein Artikel zugeordnet. Nach dem Speichern wird die Position mit den neuen Angaben erneut vorgeschlagen.</div>'}
+  `;
+  const ok = await modal({
+    title: 'Größe / Variante ergänzen',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind: 'sec', value: false },
+      { label: 'Speichern', value: true }
+    ]
+  });
+  if (!ok) return;
+
+  const size = div.querySelector('#lineSize').value.trim() || null;
+  const variant = div.querySelector('#lineVariant').value.trim() || null;
+  const beforeLine = cloneData(line);
+  line.rawSize = size;
+  line.rawVariant = variant;
+
+  const previousArticleId = line.matchedArticleId || null;
+  const match = matchLine(line, imp?.supplierId || null);
+  if (!previousArticleId && match.articleId) {
+    line.matchedArticleId = match.articleId;
+    line.matchStatus = 'manual';
+    line.matchScore = match.score;
+    line.note = `Größe/Variante ergänzt · ${match.note}`;
+  } else if (previousArticleId) {
+    line.matchStatus = 'manual';
+    line.matchScore = 100;
+    line.note = 'Größe/Variante manuell ergänzt';
+  } else {
+    line.matchStatus = 'needs_review';
+    line.matchScore = 0;
+    line.note = 'Größe/Variante ergänzt · Kein Treffer';
+  }
+
+  const articleToUpdate = state.articles.find(article => article.id === line.matchedArticleId) || null;
+  const shouldUpdateArticle = !!div.querySelector('#updateArticleSize')?.checked;
+  if (shouldUpdateArticle && articleToUpdate) {
+    const beforeArticle = cloneData(articleToUpdate);
+    let changed = false;
+    if (size && !articleToUpdate.size) { articleToUpdate.size = size; changed = true; }
+    if (variant && !articleToUpdate.variant) { articleToUpdate.variant = variant; changed = true; }
+    if (changed) {
+      syncArticleAliasesWithDimensions(articleToUpdate.id, size, variant);
+      audit('UPDATE_ARTICLE_DIMENSIONS_FROM_IMPORT', 'article', articleToUpdate.id, beforeArticle, articleToUpdate);
+    }
+  }
+
+  audit('UPDATE_IMPORT_LINE_DETAILS', 'importLine', line.id, beforeLine, line);
+  persist();
+  toast('Größe/Variante gespeichert.', 'success');
   navigate('review/' + line.importId);
 }
 
@@ -3543,11 +3634,15 @@ function renderArticlesList() {
             <td style="color:#64748b; font-size:12px;">${a.articleNumber ? escapeHtml(a.articleNumber) : '—'}</td>
             <td style="color:#64748b; font-size:12px;">${a.supplier ? escapeHtml(a.supplier) : '—'}</td>
             <td>${ci.icon} ${escapeHtml(ci.label)}</td>
-            <td>${escapeHtml(a.size||'—')}</td>
+            <td>${articleSizeCell(a)}</td>
             <td>${escapeHtml(a.variant||'—')}</td>
             <td class="num"><span class="pill ${low?'red':'green'}">${a.stock}</span></td>
             <td class="num">${a.minStock||0}</td>
-            <td><button class="ghost small" onclick="editArticle(${a.id})">bearbeiten</button> <button class="ghost small" onclick="duplicateArticle(${a.id})">duplizieren</button></td>
+            <td>
+              ${!a.size && a.personalAssignment ? `<button class="sec small" onclick="quickSetArticleSize(${a.id})">Größe eintragen</button>` : ''}
+              <button class="ghost small" onclick="editArticle(${a.id})">bearbeiten</button>
+              <button class="ghost small" onclick="duplicateArticle(${a.id})">duplizieren</button>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -3641,7 +3736,10 @@ function editArticle(id, preset) {
     if (!data.internalName) { toast('Bezeichnung ist Pflicht.', 'error'); return; }
     if (rules.requireLocationForNewArticle && !data.location) { toast('Lagerort ist laut Einstellungen Pflicht.', 'error'); return; }
     if (rules.requireMinStockForNewArticle && data.minStock <= 0) { toast('Mindestbestand ist laut Einstellungen Pflicht.', 'error'); return; }
-    if (id) Object.assign(art, data);
+    if (id) {
+      Object.assign(art, data);
+      syncArticleAliasesWithDimensions(art.id, data.size, data.variant);
+    }
     else {
       const start = parseInt(div.querySelector('#istart').value) || 0;
       const newArt = { id: nextId(), ...data, stock: start };
@@ -3661,6 +3759,45 @@ function editArticle(id, preset) {
   });
 }
 
+async function quickSetArticleSize(id) {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel bearbeiten.')) return;
+  const art = state.articles.find(article => article.id === id);
+  if (!art) return;
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="field"><label>Artikel</label><div class="subtle">${escapeHtml(art.internalName || '—')}${art.articleNumber ? ' · ' + escapeHtml(art.articleNumber) : ''}</div></div>
+    <div class="grid-2">
+      <div class="field"><label>Größe</label><input id="quickSize" value="${escapeHtml(art.size || '')}" placeholder="z. B. 42, 43, M, XL"></div>
+      <div class="field"><label>Variante / Farbe</label><input id="quickVariant" value="${escapeHtml(art.variant || '')}" placeholder="z. B. schwarz"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="quickAlias" checked style="width:auto;">
+      Lieferanten-Aliase mit Größe/Variante ergänzen
+    </label>
+    <div class="help">Empfohlen für Schuhe und Kleidung: So findet der Import spätere Rechnungen genauer.</div>
+  `;
+  const ok = await modal({
+    title: 'Größe nachtragen',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind: 'sec', value: false },
+      { label: 'Speichern', value: true }
+    ]
+  });
+  if (!ok) return;
+  const size = div.querySelector('#quickSize').value.trim() || null;
+  const variant = div.querySelector('#quickVariant').value.trim() || null;
+  if (!size) { toast('Bitte eine Größe eintragen.', 'error'); return; }
+  const before = cloneData(art);
+  art.size = size;
+  art.variant = variant;
+  if (div.querySelector('#quickAlias').checked) syncArticleAliasesWithDimensions(art.id, size, variant);
+  audit('UPDATE_ARTICLE_SIZE', 'article', art.id, before, art);
+  persist();
+  toast('Größe gespeichert.', 'success');
+  handleRoute();
+}
+
 function renderArticleDetail(idStr) {
   const id = parseInt(idStr);
   const art = state.articles.find(a => a.id === id);
@@ -3678,7 +3815,7 @@ function renderArticleDetail(idStr) {
         ${art.articleNumber ? `<div><label>Artikelnummer / SKU</label><div><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">${escapeHtml(art.articleNumber)}</code></div></div>` : ''}
         ${art.ean ? `<div><label>EAN / Barcode</label><div><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">${escapeHtml(art.ean)}</code></div></div>` : ''}
         ${art.supplier ? `<div><label>Lieferant</label><div>${escapeHtml(art.supplier)}</div></div>` : ''}
-        <div><label>Größe</label><div>${escapeHtml(art.size||'—')}</div></div>
+        <div><label>Größe</label><div>${articleSizeCell(art)} ${!art.size && art.personalAssignment ? `<button class="ghost small" onclick="quickSetArticleSize(${art.id})">eintragen</button>` : ''}</div></div>
         <div><label>Variante</label><div>${escapeHtml(art.variant||'—')}</div></div>
         <div><label>Lagerort</label><div>${escapeHtml(art.location||'—')}</div></div>
         <div><label>Letzter EK</label><div>${fmtMoney(art.lastPurchasePrice)}</div></div>
