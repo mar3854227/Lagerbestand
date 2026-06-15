@@ -236,12 +236,12 @@
     <div class="brand">
       <div class="brand-icon">📦</div>
       <div>
-        <div class="brand-name">Lagerverwaltung</div>
-        <div class="brand-sub">Arbeitskleidung &amp; PSA</div>
+        <div class="brand-name" id="brand-title">Lagerverwaltung</div>
+        <div class="brand-sub" id="brand-subtitle">Arbeitskleidung &amp; PSA</div>
       </div>
     </div>
     <nav class="menu" id="menu"></nav>
-    <div class="sidebar-footer" onclick="openUserSettings()" title="Rolle / Name ändern" style="cursor:pointer;">
+    <div class="sidebar-footer" onclick="navigate('settings')" title="Einstellungen" style="cursor:pointer;">
       <div class="sidebar-avatar" id="sidebar-avatar">M</div>
       <div style="flex:1; min-width:0;">
         <div class="sidebar-user" id="sidebar-user">Angemeldet</div>
@@ -284,7 +284,18 @@ const defaultData = () => ({
     nextId: 1,
     version: 1,
     users: [{ id: 1, name: 'Marcin Panus', role: 'admin' }],
-    currentUser: { id: 1, name: 'Marcin Panus', role: 'admin' }
+    currentUser: { id: 1, name: 'Marcin Panus', role: 'admin' },
+    settings: {
+      companyName: 'P&P Buntmetallhandel',
+      defaultLocation: '',
+      defaultMinStock: 0,
+      defaultCategory: 'arbeitskleidung',
+      defaultUnit: 'Stück',
+      brandTitle: 'Lagerverwaltung',
+      brandSubtitle: 'Arbeitskleidung & PSA'
+    },
+    customCategories: [],
+    customUnits: []
   }
 });
 
@@ -302,13 +313,29 @@ function migrateData(data) {
   if (!Array.isArray(data.meta.users)) data.meta.users = def.meta.users;
   if (!data.meta.currentUser) data.meta.currentUser = data.meta.users[0] || def.meta.currentUser;
   if (!Array.isArray(data.auditLog)) data.auditLog = [];
+  const defSettings = defaultData().meta.settings;
+  if (!data.meta.settings || typeof data.meta.settings !== 'object') data.meta.settings = { ...defSettings };
+  else data.meta.settings = { ...defSettings, ...data.meta.settings };
+  if (!Array.isArray(data.meta.customCategories)) data.meta.customCategories = [];
+  if (!Array.isArray(data.meta.customUnits)) data.meta.customUnits = [];
   if (!Number.isInteger(data.meta.nextId) || data.meta.nextId < 1) {
     const ids = ['suppliers','articles','aliases','employees','imports','importLines','movements','assignments','auditLog']
       .flatMap(k => Array.isArray(data[k]) ? data[k].map(x => x.id || 0) : []);
     data.meta.nextId = Math.max(0, ...ids) + 1;
   }
-  data.meta.version = 2;
+  data.meta.version = 3;
   return data;
+}
+
+function appSettings() {
+  const def = defaultData().meta.settings;
+  return { ...def, ...(state.meta.settings || {}) };
+}
+
+function slugId(s) {
+  return String(s || '').toLowerCase()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'kat-' + Date.now();
 }
 
 function loadData() {
@@ -487,20 +514,49 @@ const ICO = {
   tag:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
   truck:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
   db:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>`,
+  settings:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
 };
 
 /* =========================================================================
    CATEGORIES & UNITS
    ========================================================================= */
-const CATEGORIES = [
+const BASE_CATEGORIES = [
   { id: 'arbeitskleidung', label: 'Arbeitskleidung', personal: true,  icon: '👕', color: '#2563eb' },
   { id: 'sicherheitsschuhe', label: 'Sicherheitsschuhe', personal: true,  icon: '👟', color: '#d97706' },
   { id: 'handschuhe', label: 'Handschuhe', personal: false, icon: '🧤', color: '#7c3aed' },
   { id: 'schutzbrille', label: 'Schutzbrillen', personal: false, icon: '🥽', color: '#059669' },
   { id: 'verbrauch', label: 'Verbrauchsmaterial', personal: false, icon: '📦', color: '#64748b' }
 ];
-function catInfo(id) { return CATEGORIES.find(c => c.id === id) || { label: id||'—', icon: '📦', color: '#64748b' }; }
-const UNITS = ['Stück', 'Paar', 'Packung', 'Karton'];
+const BASE_UNITS = ['Stück', 'Paar', 'Packung', 'Karton'];
+
+function getCategories() {
+  const custom = Array.isArray(state.meta.customCategories) ? state.meta.customCategories : [];
+  return [...BASE_CATEGORIES, ...custom];
+}
+
+function getUnits() {
+  const custom = Array.isArray(state.meta.customUnits) ? state.meta.customUnits : [];
+  return [...BASE_UNITS, ...custom.filter(u => u && !BASE_UNITS.includes(u))];
+}
+
+function catInfo(id) {
+  return getCategories().find(c => c.id === id) || { label: id || '—', icon: '📦', color: '#64748b', personal: false };
+}
+
+function resolveCategoryId(raw) {
+  if (!raw) return appSettings().defaultCategory;
+  const q = raw.trim().toLowerCase();
+  const hit = getCategories().find(c => c.id === q || c.label.toLowerCase() === q);
+  return hit ? hit.id : appSettings().defaultCategory;
+}
+
+function categoryOptions(selected) {
+  return getCategories().map(c => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('');
+}
+
+function unitOptions(selected) {
+  return getUnits().map(u => `<option ${u === selected ? 'selected' : ''}>${escapeHtml(u)}</option>`).join('');
+}
 
 const MOVEMENT_TYPES = {
   eingang: 'Wareneingang',
@@ -805,8 +861,10 @@ const ROUTES = {
   'employees': renderEmployees,
   'employee': renderEmployeeDetail,
   'articles': renderArticlesList,
+  'articles-import': renderArticlesImport,
   'article': renderArticleDetail,
   'suppliers': renderSuppliers,
+  'settings': renderSettings,
   'data': renderDataView
 };
 
@@ -824,8 +882,10 @@ const PAGE_TITLES = {
   'employees': 'Mitarbeiter',
   'employee': 'Mitarbeiter-Detail',
   'articles': 'Artikel',
+  'articles-import': 'Artikel CSV-Import',
   'article': 'Artikel-Detail',
   'suppliers': 'Lieferanten',
+  'settings': 'Einstellungen',
   'data': 'Daten verwalten'
 };
 
@@ -864,12 +924,17 @@ function openUserSettings() {
 
 function updateChrome() {
   const u = currentUser();
+  const s = appSettings();
   const el = document.getElementById('sidebar-user');
   const roleEl = document.getElementById('sidebar-role');
   if (el) el.textContent = u.name || 'Angemeldet';
   if (roleEl) roleEl.textContent = ROLE_LABELS[u.role] || u.role || '';
   const avatarEl = document.getElementById('sidebar-avatar');
   if (avatarEl) avatarEl.textContent = (u.name || 'M')[0].toUpperCase();
+  const brandTitle = document.getElementById('brand-title');
+  const brandSub = document.getElementById('brand-subtitle');
+  if (brandTitle) brandTitle.textContent = s.brandTitle || 'Lagerverwaltung';
+  if (brandSub) brandSub.textContent = s.brandSubtitle || '';
 }
 
 
@@ -914,6 +979,7 @@ function renderMenu() {
       { href: 'suppliers',      label: 'Lieferanten',        ico: ICO.truck },
     ]},
     { group: 'System', items: [
+      { href: 'settings',       label: 'Einstellungen',      ico: ICO.settings },
       { href: 'data',           label: 'Daten',              ico: ICO.db },
     ]}
   ];
@@ -1068,7 +1134,7 @@ function renderInventory() {
       <input type="search" id="filterText" placeholder="Suche nach Bezeichnung / Lagerort …" style="max-width:340px;">
       <select id="filterCat" style="max-width:200px;">
         <option value="">Alle Kategorien</option>
-        ${CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+        ${getCategories().map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
       </select>
       <label style="margin:0; display:flex; align-items:center; gap:6px;">
         <input type="checkbox" id="onlyLow" style="width:auto;"> nur Mindestbestand
@@ -1501,8 +1567,8 @@ function newArticleFromLine(lineId) {
   div.innerHTML = `
     <div class="field"><label>Interne Bezeichnung</label><input id="iname" value="${escapeHtml(line.rawLabel.replace(/^#?[A-Z0-9-]+\s*/, ''))}"></div>
     <div class="grid-2">
-      <div class="field"><label>Kategorie</label><select id="icat">${CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}</select></div>
-      <div class="field"><label>Einheit</label><select id="iunit">${UNITS.map(u => `<option>${u}</option>`).join('')}</select></div>
+      <div class="field"><label>Kategorie</label><select id="icat">${categoryOptions('arbeitskleidung')}</select></div>
+      <div class="field"><label>Einheit</label><select id="iunit">${unitOptions('Stück')}</select></div>
     </div>
     <div class="grid-2">
       <div class="field"><label>Größe</label><input id="isize" value="${escapeHtml(line.rawSize||'')}"></div>
@@ -2130,9 +2196,11 @@ function renderArticlesList() {
   v.innerHTML = `
     <div class="toolbar">
       <input type="search" id="aSearch" placeholder="Suche …" style="max-width:280px;">
-      <select id="aCat"><option value="">Alle Kategorien</option>${CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}</select>
+      <select id="aCat"><option value="">Alle Kategorien</option>${getCategories().map(c => `<option value="${c.id}">${c.label}</option>`).join('')}</select>
       <div class="spacer"></div>
       <button onclick="editArticle()">+ Neuer Artikel</button>
+      <button class="sec" onclick="createArticleVariants()">Mehrere Größen</button>
+      <button class="sec" onclick="navigate('articles-import')">CSV-Import</button>
     </div>
     <div class="card scroll-x"><table id="aTable"></table></div>
   `;
@@ -2142,23 +2210,25 @@ function renderArticlesList() {
     const rows = state.articles
       .filter(a => a.active !== false)
       .filter(a => !c || a.category === c)
-      .filter(a => !q || (a.internalName + ' ' + (a.size||'') + ' ' + (a.variant||'')).toLowerCase().includes(q))
+      .filter(a => !q || (a.internalName + ' ' + (a.size||'') + ' ' + (a.variant||'') + ' ' + (a.articleNumber||'') + ' ' + (a.ean||'') + ' ' + (a.supplier||'')).toLowerCase().includes(q))
       .sort((a,b) => a.internalName.localeCompare(b.internalName));
     $('#aTable').innerHTML = `
-      <thead><tr><th>Bezeichnung</th><th>Kategorie</th><th>Größe</th><th>Variante</th><th class="num">Bestand</th><th class="num">Min</th><th>Aktionen</th></tr></thead>
+      <thead><tr><th>Bezeichnung</th><th>Art.-Nr.</th><th>Lieferant</th><th>Kategorie</th><th>Größe</th><th>Variante</th><th class="num">Bestand</th><th class="num">Min</th><th>Aktionen</th></tr></thead>
       <tbody>
-        ${rows.length === 0 ? '<tr><td colspan="7"><div class="empty"><div class="empty-ico">🏷️</div><div>Keine Artikel</div></div></td></tr>' : rows.map(a => {
+        ${rows.length === 0 ? '<tr><td colspan="9"><div class="empty"><div class="empty-ico">🏷️</div><div>Keine Artikel</div></div></td></tr>' : rows.map(a => {
           const ci = catInfo(a.category);
           const low = a.minStock > 0 && a.stock <= a.minStock;
           return `
           <tr class="${low ? 'row-danger' : ''}">
             <td><a href="#article/${a.id}">${escapeHtml(a.internalName)}</a></td>
+            <td style="color:#64748b; font-size:12px;">${a.articleNumber ? escapeHtml(a.articleNumber) : '—'}</td>
+            <td style="color:#64748b; font-size:12px;">${a.supplier ? escapeHtml(a.supplier) : '—'}</td>
             <td>${ci.icon} ${escapeHtml(ci.label)}</td>
             <td>${escapeHtml(a.size||'—')}</td>
             <td>${escapeHtml(a.variant||'—')}</td>
             <td class="num"><span class="pill ${low?'red':'green'}">${a.stock}</span></td>
             <td class="num">${a.minStock||0}</td>
-            <td><button class="ghost small" onclick="editArticle(${a.id})">bearbeiten</button></td>
+            <td><button class="ghost small" onclick="editArticle(${a.id})">bearbeiten</button> <button class="ghost small" onclick="duplicateArticle(${a.id})">duplizieren</button></td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2169,25 +2239,46 @@ function renderArticlesList() {
   refresh();
 }
 
-function editArticle(id) {
+function editArticle(id, preset) {
   if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel bearbeiten.')) return;
+  const cfg = appSettings();
   const art = id ? state.articles.find(a => a.id === id) : {
-    internalName:'', category:'arbeitskleidung', size:'', variant:'', unit:'Stück',
-    stock:0, minStock:0, location:'', lastPurchasePrice:null, personalAssignment:true, active:true
+    internalName: preset?.internalName || '',
+    articleNumber: preset?.articleNumber || '',
+    ean: preset?.ean || '',
+    supplier: preset?.supplier || '',
+    notes: preset?.notes || '',
+    category: preset?.category || cfg.defaultCategory,
+    size: preset?.size || '',
+    variant: preset?.variant || '',
+    unit: preset?.unit || cfg.defaultUnit,
+    stock: preset?.stock ?? 0,
+    minStock: preset?.minStock ?? cfg.defaultMinStock,
+    location: preset?.location || cfg.defaultLocation || '',
+    lastPurchasePrice: preset?.lastPurchasePrice ?? null,
+    personalAssignment: preset?.personalAssignment ?? !!catInfo(cfg.defaultCategory).personal,
+    active: true
   };
   if (!art) return;
   const div = document.createElement('div');
   div.innerHTML = `
     <div class="field"><label>Interne Bezeichnung *</label><input id="iname" value="${escapeHtml(art.internalName)}"></div>
     <div class="grid-2">
-      <div class="field"><label>Kategorie</label><select id="icat">${CATEGORIES.map(c => `<option value="${c.id}" ${c.id===art.category?'selected':''}>${c.label}</option>`).join('')}</select></div>
-      <div class="field"><label>Einheit</label><select id="iunit">${UNITS.map(u => `<option ${u===art.unit?'selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="field"><label>Artikelnummer / SKU</label><input id="iartno" placeholder="z. B. ART-001" value="${escapeHtml(art.articleNumber||'')}"></div>
+      <div class="field"><label>EAN / Barcode</label><input id="iean" placeholder="z. B. 4012345678901" value="${escapeHtml(art.ean||'')}"></div>
+      <div class="field"><label>Lieferant</label><input id="isupplier" placeholder="z. B. Musterlieferant GmbH" value="${escapeHtml(art.supplier||'')}"></div>
+      <div class="field"><label>Kategorie</label><select id="icat">${categoryOptions(art.category)}</select></div>
+      <div class="field"><label>Einheit</label><select id="iunit">${unitOptions(art.unit)}</select></div>
       <div class="field"><label>Größe</label><input id="isize" value="${escapeHtml(art.size||'')}"></div>
       <div class="field"><label>Variante / Farbe</label><input id="ivar" value="${escapeHtml(art.variant||'')}"></div>
       <div class="field"><label>Lagerort</label><input id="iloc" value="${escapeHtml(art.location||'')}"></div>
       <div class="field"><label>Mindestbestand</label><input id="imin" type="number" min="0" value="${art.minStock||0}"></div>
       ${id ? '' : `<div class="field"><label>Anfangsbestand</label><input id="istart" type="number" min="0" value="0"></div>`}
       <div class="field"><label>Letzter EK (€)</label><input id="iprice" value="${art.lastPurchasePrice ? (art.lastPurchasePrice/100).toFixed(2).replace('.', ',') : ''}"></div>
+    </div>
+    <div class="field">
+      <label>Beschreibung / Notizen</label>
+      <textarea id="inotes" rows="3" style="width:100%; resize:vertical;">${escapeHtml(art.notes||'')}</textarea>
     </div>
     <div class="field" style="display:flex; align-items:center; gap:8px;">
       <input type="checkbox" id="ipers" ${art.personalAssignment?'checked':''} style="width:auto;">
@@ -2213,6 +2304,10 @@ function editArticle(id) {
     }
     const data = {
       internalName: div.querySelector('#iname').value.trim(),
+      articleNumber: div.querySelector('#iartno').value.trim() || null,
+      ean: div.querySelector('#iean').value.trim() || null,
+      supplier: div.querySelector('#isupplier').value.trim() || null,
+      notes: div.querySelector('#inotes').value.trim() || null,
       category: div.querySelector('#icat').value,
       unit: div.querySelector('#iunit').value,
       size: div.querySelector('#isize').value.trim() || null,
@@ -2258,14 +2353,19 @@ function renderArticleDetail(idStr) {
         <div><label>Bezeichnung</label><div><strong>${escapeHtml(art.internalName)}</strong></div></div>
         <div><label>Kategorie</label><div>${catInfo(art.category).icon} ${escapeHtml(catInfo(art.category).label)}</div></div>
         <div><label>Bestand</label><div><span class="pill ${low?'red':'green'}">${art.stock} ${escapeHtml(art.unit||'')}</span> · Min ${art.minStock||0}</div></div>
+        ${art.articleNumber ? `<div><label>Artikelnummer / SKU</label><div><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">${escapeHtml(art.articleNumber)}</code></div></div>` : ''}
+        ${art.ean ? `<div><label>EAN / Barcode</label><div><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">${escapeHtml(art.ean)}</code></div></div>` : ''}
+        ${art.supplier ? `<div><label>Lieferant</label><div>${escapeHtml(art.supplier)}</div></div>` : ''}
         <div><label>Größe</label><div>${escapeHtml(art.size||'—')}</div></div>
         <div><label>Variante</label><div>${escapeHtml(art.variant||'—')}</div></div>
         <div><label>Lagerort</label><div>${escapeHtml(art.location||'—')}</div></div>
         <div><label>Letzter EK</label><div>${fmtMoney(art.lastPurchasePrice)}</div></div>
         <div><label>Personenbezogen?</label><div>${art.personalAssignment ? 'Ja' : 'Nein'}</div></div>
       </div>
+      ${art.notes ? `<div style="margin-top:10px; padding-top:10px; border-top:1px solid #e2e8f0;"><label>Beschreibung / Notizen</label><div style="margin-top:4px; color:#374151;">${escapeHtml(art.notes)}</div></div>` : ''}
       <div class="actions" style="margin-top:10px;">
         <button class="sec" onclick="editArticle(${art.id})">Bearbeiten</button>
+        <button class="sec" onclick="duplicateArticle(${art.id})">Duplizieren</button>
         <a class="btn" href="#issue">Ausgabe buchen</a>
         <a class="btn sec" href="#manual-receipt">Wareneingang buchen</a>
       </div>
@@ -2315,6 +2415,378 @@ function renderArticleDetail(idStr) {
       `}
     </div>
   `;
+}
+
+/* ---------- Einstellungen ---------- */
+function renderSettings() {
+  const isAdmin = can('admin');
+  const s = appSettings();
+  const u = currentUser();
+  const customCats = state.meta.customCategories || [];
+  const customUnits = state.meta.customUnits || [];
+  const v = $('#view');
+  v.innerHTML = `
+    <p class="lead">${isAdmin ? 'Firma, Standardwerte, eigene Kategorien/Einheiten und Benutzer.' : 'Dein Anzeigename und deine Rolle.'}</p>
+
+    ${isAdmin ? `
+    <div class="card">
+      <h2>Firma &amp; Anzeige</h2>
+      <div class="grid-2">
+        <div class="field"><label>Firmenname</label><input id="setCompany" value="${escapeHtml(s.companyName || '')}"></div>
+        <div class="field"><label>Standard-Lagerort</label><input id="setLocation" value="${escapeHtml(s.defaultLocation || '')}" placeholder="z. B. Regal A1"></div>
+        <div class="field"><label>Titel in der Sidebar</label><input id="setBrandTitle" value="${escapeHtml(s.brandTitle || '')}"></div>
+        <div class="field"><label>Untertitel</label><input id="setBrandSub" value="${escapeHtml(s.brandSubtitle || '')}"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Standardwerte für neue Artikel</h2>
+      <div class="grid-2">
+        <div class="field"><label>Standard-Kategorie</label><select id="setCat">${categoryOptions(s.defaultCategory)}</select></div>
+        <div class="field"><label>Standard-Einheit</label><select id="setUnit">${unitOptions(s.defaultUnit)}</select></div>
+        <div class="field"><label>Standard-Mindestbestand</label><input id="setMin" type="number" min="0" value="${s.defaultMinStock || 0}"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Eigene Kategorien (${customCats.length})</h2>
+      <p class="help">Zusätzlich zu den festen Kategorien (Arbeitskleidung, Handschuhe …).</p>
+      ${customCats.length === 0 ? '<div class="empty">Noch keine eigenen Kategorien.</div>' : `
+        <table style="margin-bottom:12px;">
+          <thead><tr><th>Icon</th><th>Name</th><th>ID</th><th>Personenbezogen</th><th></th></tr></thead>
+          <tbody>
+            ${customCats.map(c => `
+              <tr>
+                <td>${escapeHtml(c.icon || '📦')}</td>
+                <td>${escapeHtml(c.label)}</td>
+                <td><code>${escapeHtml(c.id)}</code></td>
+                <td>${c.personal ? 'Ja' : 'Nein'}</td>
+                <td><button class="ghost small" onclick="removeCustomCategory(${JSON.stringify(c.id)})">entfernen</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+      <div class="grid-2">
+        <div class="field"><label>Neue Kategorie</label><input id="newCatLabel" placeholder="z. B. Gehörschutz"></div>
+        <div class="field"><label>Icon (Emoji)</label><input id="newCatIcon" value="📦" maxlength="4"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <input type="checkbox" id="newCatPersonal" style="width:auto;"> Personenbezogene Zuordnung
+      </label>
+      <button class="sec" onclick="addCustomCategory()">Kategorie hinzufügen</button>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Eigene Einheiten (${customUnits.length})</h2>
+      ${customUnits.length ? `<p class="help">${customUnits.map(u => escapeHtml(u)).join(' · ')}</p>` : '<div class="empty">Nur Standard-Einheiten aktiv.</div>'}
+      <div class="actions">
+        <input id="newUnit" placeholder="z. B. Liter, Rolle" style="max-width:220px;">
+        <button class="sec" onclick="addCustomUnit()">Einheit hinzufügen</button>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Benutzer / Rolle</h2>
+      <div class="grid-2">
+        <div class="field"><label>Anzeigename</label><input id="setUserName" value="${escapeHtml(u.name || '')}"></div>
+        <div class="field"><label>Rolle</label>
+          <select id="setUserRole">
+            ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${k===u.role?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:14px;">
+      <button onclick="saveSettings()">Speichern</button>
+      ${isAdmin ? `
+        <a class="btn sec" href="#data">Backup &amp; Daten</a>
+        <a class="btn sec" href="#articles-import">Artikel CSV-Import</a>
+      ` : ''}
+    </div>
+  `;
+}
+
+function saveSettings() {
+  const isAdmin = can('admin');
+  if (isAdmin) {
+    state.meta.settings = {
+      companyName: $('#setCompany').value.trim(),
+      defaultLocation: $('#setLocation').value.trim(),
+      brandTitle: $('#setBrandTitle').value.trim() || 'Lagerverwaltung',
+      brandSubtitle: $('#setBrandSub').value.trim(),
+      defaultCategory: $('#setCat').value,
+      defaultUnit: $('#setUnit').value,
+      defaultMinStock: parseInt($('#setMin').value) || 0
+    };
+    audit('UPDATE_SETTINGS', 'system', null, null, state.meta.settings);
+  }
+  state.meta.currentUser = {
+    ...currentUser(),
+    name: $('#setUserName').value.trim() || currentUser().name,
+    role: $('#setUserRole').value || currentUser().role
+  };
+  persist();
+  toast('Gespeichert.', 'success');
+  navigate('settings');
+}
+
+function addCustomCategory() {
+  if (!requirePermission('admin')) return;
+  const label = $('#newCatLabel').value.trim();
+  if (!label) { toast('Kategoriename angeben.', 'error'); return; }
+  const id = slugId(label);
+  if (getCategories().some(c => c.id === id)) { toast('Kategorie existiert bereits.', 'error'); return; }
+  state.meta.customCategories.push({
+    id,
+    label,
+    icon: $('#newCatIcon').value.trim() || '📦',
+    color: '#64748b',
+    personal: $('#newCatPersonal').checked
+  });
+  persist();
+  toast('Kategorie hinzugefügt.', 'success');
+  navigate('settings');
+}
+
+async function removeCustomCategory(id) {
+  if (!requirePermission('admin')) return;
+  const inUse = state.articles.some(a => a.category === id && a.active !== false);
+  if (inUse && !await confirmDialog('Kategorie wird noch von Artikeln genutzt. Trotzdem entfernen?')) return;
+  state.meta.customCategories = (state.meta.customCategories || []).filter(c => c.id !== id);
+  persist();
+  toast('Kategorie entfernt.');
+  navigate('settings');
+}
+
+function addCustomUnit() {
+  if (!requirePermission('admin')) return;
+  const unit = $('#newUnit').value.trim();
+  if (!unit) { toast('Einheit angeben.', 'error'); return; }
+  if (getUnits().includes(unit)) { toast('Einheit existiert bereits.', 'error'); return; }
+  state.meta.customUnits.push(unit);
+  persist();
+  toast('Einheit hinzugefügt.', 'success');
+  navigate('settings');
+}
+
+/* ---------- Artikel: Duplizieren & Varianten ---------- */
+function duplicateArticle(id) {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel duplizieren.')) return;
+  const src = state.articles.find(a => a.id === id);
+  if (!src) return;
+  editArticle(null, {
+    internalName: src.internalName,
+    articleNumber: src.articleNumber || '',
+    ean: src.ean || '',
+    supplier: src.supplier || '',
+    notes: src.notes || '',
+    category: src.category,
+    size: src.size || '',
+    variant: src.variant || '',
+    unit: src.unit,
+    stock: 0,
+    minStock: src.minStock,
+    location: src.location || '',
+    lastPurchasePrice: src.lastPurchasePrice,
+    personalAssignment: src.personalAssignment
+  });
+}
+
+function createArticleVariants() {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel anlegen.')) return;
+  const cfg = appSettings();
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <p class="help">Legt mehrere Artikel mit gleicher Bezeichnung und unterschiedlichen Größen an — ideal für T-Shirts, Schuhe etc.</p>
+    <div class="field"><label>Bezeichnung *</label><input id="vName" placeholder="z. B. T-Shirt #E190"></div>
+    <div class="grid-2">
+      <div class="field"><label>Kategorie</label><select id="vCat">${categoryOptions(cfg.defaultCategory)}</select></div>
+      <div class="field"><label>Einheit</label><select id="vUnit">${unitOptions(cfg.defaultUnit)}</select></div>
+      <div class="field"><label>Variante / Farbe</label><input id="vVar" placeholder="z. B. Schwarz"></div>
+      <div class="field"><label>Mindestbestand je Größe</label><input id="vMin" type="number" min="0" value="${cfg.defaultMinStock || 0}"></div>
+      <div class="field"><label>Lagerort</label><input id="vLoc" value="${escapeHtml(cfg.defaultLocation || '')}"></div>
+      <div class="field"><label>Anfangsbestand je Größe</label><input id="vStock" type="number" min="0" value="0"></div>
+    </div>
+    <div class="field"><label>Größen (eine pro Zeile oder kommagetrennt) *</label>
+      <textarea id="vSizes" rows="4" placeholder="S&#10;M&#10;L&#10;XL&#10;XXL"></textarea>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="vPers" ${catInfo(cfg.defaultCategory).personal ? 'checked' : ''} style="width:auto;">
+      Personenbezogene Zuordnung
+    </label>
+  `;
+  div.querySelector('#vCat').onchange = () => {
+    div.querySelector('#vPers').checked = !!catInfo(div.querySelector('#vCat').value).personal;
+  };
+  modal({
+    title: 'Mehrere Größen anlegen',
+    body: div,
+    footer: [
+      { label: 'Abbrechen', kind: 'sec', value: false },
+      { label: 'Anlegen', value: true }
+    ]
+  }).then(ok => {
+    if (!ok) return;
+    const name = div.querySelector('#vName').value.trim();
+    const rawSizes = div.querySelector('#vSizes').value;
+    const sizes = rawSizes.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+    if (!name || sizes.length === 0) { toast('Bezeichnung und mindestens eine Größe angeben.', 'error'); return; }
+    const cat = div.querySelector('#vCat').value;
+    const data = {
+      category: cat,
+      unit: div.querySelector('#vUnit').value,
+      variant: div.querySelector('#vVar').value.trim() || null,
+      minStock: parseInt(div.querySelector('#vMin').value) || 0,
+      location: div.querySelector('#vLoc').value.trim() || null,
+      personalAssignment: div.querySelector('#vPers').checked,
+      lastPurchasePrice: null
+    };
+    const startStock = parseInt(div.querySelector('#vStock').value) || 0;
+    let created = 0;
+    for (const size of sizes) {
+      const exists = state.articles.some(a => a.active !== false && a.internalName === name && (a.size || '') === size && (a.variant || '') === (data.variant || ''));
+      if (exists) continue;
+      const newArt = { id: nextId(), internalName: name, size, ...data, stock: startStock, active: true };
+      state.articles.push(newArt);
+      if (startStock > 0) {
+        state.movements.push({
+          id: nextId(), articleId: newArt.id, type: 'eingang',
+          quantity: startStock, employeeId: null, importLineId: null,
+          unitPrice: null, note: 'Anfangsbestand (Varianten)', occurredAt: todayISO()
+        });
+      }
+      created++;
+    }
+    if (created === 0) { toast('Keine neuen Artikel — alle Kombinationen existieren schon.', 'error'); return; }
+    audit('CREATE_ARTICLE_VARIANTS', 'article', null, null, { name, count: created });
+    persist();
+    toast(`${created} Artikel angelegt.`, 'success');
+    navigate('articles');
+  });
+}
+
+function downloadArticlesCsvTemplate() {
+  if (!requirePermission('write')) return;
+  const header = 'Bezeichnung;Kategorie;Größe;Variante;Einheit;Bestand;Mindestbestand;Lagerort;EK_netto';
+  const rows = [
+    'Schutzhandschuh Nitril;handschuhe;L;;Paar;24;30;Regal A1;0,89',
+    'T-Shirt #E190;arbeitskleidung;M;Schwarz;Stück;0;5;Regal B1;31,89',
+    'Gehörschutz;verbrauch;;;Stück;10;5;Regal C1;'
+  ];
+  downloadText('artikel-vorlage.csv', header + '\n' + rows.join('\n') + '\n', 'text/csv;charset=utf-8');
+}
+
+function parseCsvRow(line, sep) {
+  const out = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQ = !inQ; continue; }
+    if (!inQ && ch === sep) { out.push(cur.trim()); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function renderArticlesImport() {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel importieren.')) return;
+  const v = $('#view');
+  v.innerHTML = `
+    <p class="lead">Viele Artikel auf einmal per CSV/TXT — z. B. aus Excel exportiert (Trennzeichen <code>;</code>).</p>
+    <div class="card">
+      <div class="actions" style="margin-bottom:12px;">
+        <button class="sec" onclick="downloadArticlesCsvTemplate()">Vorlage herunterladen</button>
+        <button class="sec" onclick="navigate('articles')">← Zur Artikelliste</button>
+      </div>
+      <div class="field">
+        <label>CSV-Datei</label>
+        <input type="file" id="csvFile" accept=".csv,.txt,text/csv,text/plain">
+      </div>
+      <hr class="sep">
+      <div class="field">
+        <label>Oder CSV-Text einfügen</label>
+        <textarea id="csvText" rows="12" placeholder="Bezeichnung;Kategorie;Größe;Variante;Einheit;Bestand;Mindestbestand;Lagerort;EK_netto"></textarea>
+      </div>
+      <div class="help">Spalten: Bezeichnung (Pflicht), Kategorie (Name oder ID), Größe, Variante, Einheit, Bestand, Mindestbestand, Lagerort, EK netto in €</div>
+      <div class="actions">
+        <button onclick="importArticlesFromCsv()">Artikel importieren</button>
+      </div>
+    </div>
+  `;
+  $('#csvFile').onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { $('#csvText').value = r.result; };
+    r.readAsText(f, 'utf-8');
+  };
+}
+
+async function importArticlesFromCsv() {
+  if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel importieren.')) return;
+  const text = ($('#csvText').value || '').trim();
+  if (!text) { toast('CSV-Text einfügen oder Datei wählen.', 'error'); return; }
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return;
+  const sep = lines[0].includes(';') ? ';' : ',';
+  let start = 0;
+  if (/bezeichnung/i.test(lines[0])) start = 1;
+  const cfg = appSettings();
+  const pending = [];
+  let skipped = 0;
+  for (let i = start; i < lines.length; i++) {
+    const cols = parseCsvRow(lines[i], sep);
+    const name = (cols[0] || '').trim();
+    if (!name) { skipped++; continue; }
+    const cat = resolveCategoryId(cols[1]);
+    const size = (cols[2] || '').trim() || null;
+    const variant = (cols[3] || '').trim() || null;
+    const unit = (cols[4] || '').trim() || cfg.defaultUnit;
+    const stock = parseInt(cols[5]) || 0;
+    const minStock = parseInt(cols[6]) || cfg.defaultMinStock || 0;
+    const location = (cols[7] || '').trim() || cfg.defaultLocation || null;
+    const price = parseGermanNumber(cols[8]);
+    const exists = state.articles.some(a => a.active !== false && a.internalName === name && (a.size || '') === (size || '') && (a.variant || '') === (variant || ''));
+    if (exists) { skipped++; continue; }
+    pending.push({ name, cat, size, variant, unit, stock, minStock, location, price });
+  }
+  if (pending.length === 0) {
+    toast(`Keine neuen Artikel (${skipped} übersprungen).`, 'error');
+    return;
+  }
+  if (!await confirmDialog(`${pending.length} Artikel importieren${skipped ? ` (${skipped} übersprungen)` : ''}?`)) return;
+  for (const p of pending) {
+    const newArt = {
+      id: nextId(),
+      internalName: p.name,
+      category: p.cat,
+      size: p.size,
+      variant: p.variant,
+      unit: p.unit,
+      stock: p.stock,
+      minStock: p.minStock,
+      location: p.location,
+      lastPurchasePrice: p.price != null ? toCents(p.price) : null,
+      personalAssignment: !!catInfo(p.cat).personal,
+      active: true
+    };
+    state.articles.push(newArt);
+    if (p.stock > 0) {
+      state.movements.push({
+        id: nextId(), articleId: newArt.id, type: 'eingang',
+        quantity: p.stock, employeeId: null, importLineId: null,
+        unitPrice: newArt.lastPurchasePrice, note: 'CSV-Import', occurredAt: todayISO()
+      });
+    }
+  }
+  audit('IMPORT_ARTICLES_CSV', 'article', null, null, { created: pending.length, skipped });
+  persist();
+  toast(`${pending.length} Artikel importiert.`, 'success');
+  navigate('articles');
 }
 
 /* ---------- Lieferanten ---------- */
@@ -2621,6 +3093,7 @@ function initOnce() {
 initOnce();
 handleRoute();
 renderMenu();
+updateChrome();
 </script>
 </body>
 </html>
