@@ -228,6 +228,17 @@
   .scroll-x { overflow-x: auto; }
   a { color: #2563eb; text-decoration: none; }
   a:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; height: auto; max-height: none; }
+    nav.menu { overflow-x: auto; }
+    .topbar { padding: 0 16px; }
+    .container { padding: 16px; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .row { flex-direction: column; }
+    .actions { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
@@ -269,17 +280,82 @@
    STORAGE
    ========================================================================= */
 const STORAGE_KEY = 'lagerverwaltung_v1';
+const STATE_ARRAY_KEYS = ['suppliers', 'articles', 'aliases', 'employees', 'imports', 'importLines', 'movements', 'assignments'];
+const STANDARD_UNITS = ['Stück', 'Paar', 'Packung', 'Karton'];
+const DEFAULT_CUSTOM_UNITS = ['Rolle', 'Paar'];
+
+function defaultImportBehavior() {
+  return {
+    autoCreateSupplier: true,
+    autoCreateArticle: false,
+    autoApproveSuggestions: false,
+    autoApproveScore: 92,
+    autoBookImportIfComplete: false,
+    requireInvoiceNumber: true,
+    copySkuToArticleNumber: true,
+    copySupplierToArticle: true,
+    copyInvoiceToNotes: true
+  };
+}
+
+function defaultInventoryRules() {
+  return {
+    preventNegativeStock: false,
+    requireLocationForNewArticle: false,
+    requireMinStockForNewArticle: false
+  };
+}
+
+function mergeSettings(base, current) {
+  return {
+    ...base,
+    ...(current || {}),
+    importBehavior: {
+      ...(base.importBehavior || {}),
+      ...((current || {}).importBehavior || {})
+    },
+    inventoryRules: {
+      ...(base.inventoryRules || {}),
+      ...((current || {}).inventoryRules || {})
+    }
+  };
+}
+
+function uniqueStrings(values) {
+  return [...new Set((values || []).map(v => String(v || '').trim()).filter(Boolean))];
+}
+
+function articleStockValue(article) {
+  if (!article || typeof article !== 'object') return 0;
+  if (Number.isFinite(article.stock)) return article.stock;
+  if (Number.isFinite(article.currentStock)) return article.currentStock;
+  return 0;
+}
+
+function normalizeCustomUnits(customUnits, articles) {
+  const articleUnits = Array.isArray(articles)
+    ? articles.map(article => article && typeof article === 'object' ? article.unit : null)
+      .filter(unit => unit && !STANDARD_UNITS.includes(unit))
+    : [];
+  return uniqueStrings([...DEFAULT_CUSTOM_UNITS, ...(customUnits || []), ...articleUnits]);
+}
+
+function orderState(data) {
+  return {
+    meta: data.meta,
+    suppliers: data.suppliers,
+    articles: data.articles,
+    aliases: data.aliases,
+    employees: data.employees,
+    imports: data.imports,
+    importLines: data.importLines,
+    movements: data.movements,
+    assignments: data.assignments,
+    auditLog: data.auditLog
+  };
+}
 
 const defaultData = () => ({
-  suppliers: [],
-  articles: [],
-  aliases: [],
-  employees: [],
-  imports: [],
-  importLines: [],
-  movements: [],
-  assignments: [],
-  auditLog: [],
   meta: {
     nextId: 1,
     version: 1,
@@ -292,11 +368,22 @@ const defaultData = () => ({
       defaultCategory: 'arbeitskleidung',
       defaultUnit: 'Stück',
       brandTitle: 'Lagerverwaltung',
-      brandSubtitle: 'Arbeitskleidung & PSA'
+      brandSubtitle: 'Arbeitskleidung & PSA',
+      importBehavior: defaultImportBehavior(),
+      inventoryRules: defaultInventoryRules()
     },
     customCategories: [],
-    customUnits: []
-  }
+    customUnits: [...DEFAULT_CUSTOM_UNITS]
+  },
+  suppliers: [],
+  articles: [],
+  aliases: [],
+  employees: [],
+  imports: [],
+  importLines: [],
+  movements: [],
+  assignments: [],
+  auditLog: []
 });
 
 const ROLE_PERMISSIONS = {
@@ -308,28 +395,60 @@ const ROLE_PERMISSIONS = {
 
 function migrateData(data) {
   const def = defaultData();
-  for (const k of Object.keys(def)) if (data[k] === undefined) data[k] = def[k];
-  data.meta = { ...def.meta, ...(data.meta || {}) };
-  if (!Array.isArray(data.meta.users)) data.meta.users = def.meta.users;
-  if (!data.meta.currentUser) data.meta.currentUser = data.meta.users[0] || def.meta.currentUser;
-  if (!Array.isArray(data.auditLog)) data.auditLog = [];
-  const defSettings = defaultData().meta.settings;
-  if (!data.meta.settings || typeof data.meta.settings !== 'object') data.meta.settings = { ...defSettings };
-  else data.meta.settings = { ...defSettings, ...data.meta.settings };
-  if (!Array.isArray(data.meta.customCategories)) data.meta.customCategories = [];
-  if (!Array.isArray(data.meta.customUnits)) data.meta.customUnits = [];
-  if (!Number.isInteger(data.meta.nextId) || data.meta.nextId < 1) {
-    const ids = ['suppliers','articles','aliases','employees','imports','importLines','movements','assignments','auditLog']
-      .flatMap(k => Array.isArray(data[k]) ? data[k].map(x => x.id || 0) : []);
-    data.meta.nextId = Math.max(0, ...ids) + 1;
+  const normalized = { ...data };
+  for (const k of [...STATE_ARRAY_KEYS, 'auditLog']) {
+    if (!Array.isArray(normalized[k])) normalized[k] = def[k];
   }
-  data.meta.version = 3;
-  return data;
+  normalized.meta = { ...def.meta, ...(normalized.meta || {}) };
+  if (!Array.isArray(normalized.meta.users)) normalized.meta.users = def.meta.users;
+  if (!normalized.meta.currentUser) normalized.meta.currentUser = normalized.meta.users[0] || def.meta.currentUser;
+  if (!Array.isArray(normalized.auditLog)) normalized.auditLog = [];
+  const defSettings = defaultData().meta.settings;
+  if (!normalized.meta.settings || typeof normalized.meta.settings !== 'object') normalized.meta.settings = mergeSettings(defSettings, {});
+  else normalized.meta.settings = mergeSettings(defSettings, normalized.meta.settings);
+  normalized.suppliers = normalized.suppliers.map(supplier => {
+    if (!supplier || typeof supplier !== 'object') return supplier;
+    const taxId = supplier.taxId || supplier.vatId || null;
+    return {
+      ...supplier,
+      shortName: supplier.shortName || null,
+      email: supplier.email || null,
+      phone: supplier.phone || null,
+      website: supplier.website || null,
+      taxId,
+      vatId: supplier.vatId || taxId,
+      notes: supplier.notes || null
+    };
+  });
+  normalized.articles = normalized.articles.map(article => {
+    if (!article || typeof article !== 'object') return article;
+    if ((article.stock == null || Number.isNaN(article.stock)) && Number.isFinite(article.currentStock)) {
+      return { ...article, stock: article.currentStock };
+    }
+    return article;
+  });
+  if (!Array.isArray(normalized.meta.customCategories)) normalized.meta.customCategories = [];
+  normalized.meta.customUnits = normalizeCustomUnits(normalized.meta.customUnits, normalized.articles);
+  if (!Number.isInteger(normalized.meta.nextId) || normalized.meta.nextId < 1) {
+    const ids = [...STATE_ARRAY_KEYS, 'auditLog']
+      .flatMap(k => Array.isArray(normalized[k]) ? normalized[k].map(x => x.id || 0) : []);
+    normalized.meta.nextId = Math.max(0, ...ids) + 1;
+  }
+  normalized.meta.version = 3;
+  return orderState(normalized);
 }
 
 function appSettings() {
   const def = defaultData().meta.settings;
-  return { ...def, ...(state.meta.settings || {}) };
+  return mergeSettings(def, state.meta.settings || {});
+}
+
+function importBehaviorSettings() {
+  return appSettings().importBehavior || defaultImportBehavior();
+}
+
+function inventoryRulesSettings() {
+  return appSettings().inventoryRules || defaultInventoryRules();
 }
 
 function slugId(s) {
@@ -351,6 +470,7 @@ function loadData() {
 }
 
 function saveData() {
+  state = migrateData(state);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
@@ -424,6 +544,85 @@ function parseGermanNumber(s) {
 function toCents(v) {
   if (v == null) return null;
   return Math.round(v * 100);
+}
+
+function normalizeLookupText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function supplierTaxIdValue(supplier) {
+  return supplier?.taxId || supplier?.vatId || null;
+}
+
+function findSupplierByName(name) {
+  const needle = normalizeLookupText(name);
+  if (!needle) return null;
+  return state.suppliers.find(supplier => {
+    const values = [supplier.name, supplier.shortName, supplier.website];
+    return values.some(value => {
+      const hay = normalizeLookupText(value);
+      return hay && (hay === needle || hay.includes(needle) || needle.includes(hay));
+    });
+  }) || null;
+}
+
+function guessCategoryIdFromLabel(label='') {
+  const q = normalizeLookupText(label);
+  if (!q) return appSettings().defaultCategory;
+  if (/(s3|sicherheitsschuh|halbschuh|stiefel|schuh)/.test(q)) return 'sicherheitsschuhe';
+  if (/(handschuh|glove)/.test(q)) return 'handschuhe';
+  if (/(schutzbrille|brille|goggle)/.test(q)) return 'schutzbrille';
+  if (/(muellsack|mullsack|rolle|verbrauch|tuch|papier|reiniger|beutel)/.test(q)) return 'verbrauch';
+  if (/(shirt|hose|jacke|short|bundhose|overall|weste|pullover|hoodie)/.test(q)) return 'arbeitskleidung';
+  return appSettings().defaultCategory;
+}
+
+function guessUnitForCategory(categoryId) {
+  if (categoryId === 'sicherheitsschuhe' || categoryId === 'handschuhe') return 'Paar';
+  return appSettings().defaultUnit || 'Stück';
+}
+
+function cleanImportedArticleName(label='') {
+  const sku = extractSku(label);
+  return String(label || '').replace(sku || '', '').replace(/\s+/g, ' ').trim() || String(label || '').trim();
+}
+
+function buildImportArticleDraft(line, imp, overrides={}) {
+  const cfg = appSettings();
+  const importCfg = importBehaviorSettings();
+  const category = overrides.category || guessCategoryIdFromLabel(line.rawLabel);
+  const sku = extractSku(line.rawLabel);
+  const noteParts = [];
+  if (importCfg.copyInvoiceToNotes && imp) {
+    const invoiceBits = ['Automatisch aus Rechnung', imp.invoiceNo || 'ohne Nummer'];
+    if (imp.invoiceDate) invoiceBits.push(`vom ${fmtDate(imp.invoiceDate)}`);
+    noteParts.push(invoiceBits.join(' '));
+  }
+  if (imp?.supplierName) noteParts.push(`Lieferant: ${imp.supplierName}`);
+  return {
+    internalName: cleanImportedArticleName(line.rawLabel),
+    articleNumber: importCfg.copySkuToArticleNumber ? (sku || null) : null,
+    ean: null,
+    supplier: importCfg.copySupplierToArticle ? (imp?.supplierName || null) : null,
+    notes: noteParts.join(' · ') || null,
+    category,
+    size: line.rawSize || null,
+    variant: line.rawVariant || null,
+    unit: overrides.unit || guessUnitForCategory(category),
+    stock: 0,
+    minStock: overrides.minStock ?? cfg.defaultMinStock ?? 0,
+    location: overrides.location ?? (cfg.defaultLocation || null),
+    lastPurchasePrice: line.unitPrice ?? null,
+    personalAssignment: overrides.personalAssignment ?? !!catInfo(category).personal,
+    active: true
+  };
 }
 
 function levenshteinRatio(a, b) {
@@ -527,7 +726,7 @@ const BASE_CATEGORIES = [
   { id: 'schutzbrille', label: 'Schutzbrillen', personal: false, icon: '🥽', color: '#059669' },
   { id: 'verbrauch', label: 'Verbrauchsmaterial', personal: false, icon: '📦', color: '#64748b' }
 ];
-const BASE_UNITS = ['Stück', 'Paar', 'Packung', 'Karton'];
+const BASE_UNITS = STANDARD_UNITS;
 
 function getCategories() {
   const custom = Array.isArray(state.meta.customCategories) ? state.meta.customCategories : [];
@@ -697,6 +896,88 @@ function parseMewaInvoice(text) {
   return result;
 }
 
+function parseGenericInvoice(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim());
+  const result = { ...parseInvoiceMeta(lines), items: [], format: 'generic' };
+  let inTable = false;
+  let current = null;
+  let pos = 1;
+  const flush = () => { if (current) result.items.push(current); current = null; };
+
+  for (const line of lines) {
+    if (!line) continue;
+    if (!inTable) {
+      if (/(artikel|bezeichnung).*(menge|anzahl)|(?:menge|anzahl).*(preis|einzelpreis)|\bpos\b.*\bpreis\b/i.test(line)) {
+        inTable = true;
+      }
+      continue;
+    }
+    if (/^nettobetrag|^gesamtbetrag|^gesamtsumme|^zwischensumme|^summe|^mwst|^ust|^zahlungsziel|^versand/i.test(line)) {
+      flush();
+      break;
+    }
+    let main = line.match(/^(\d+)\s+(.+?)\s+([\d.,]+)\s*€\s+(\d+)\s+([\d.,]+)\s*€\s*$/);
+    if (main) {
+      flush();
+      current = {
+        pos: parseInt(main[1]),
+        rawLabel: main[2].trim(),
+        unitPrice: toCents(parseGermanNumber(main[3])),
+        quantity: parseInt(main[4]),
+        totalPrice: toCents(parseGermanNumber(main[5])),
+        rawSize: null,
+        rawVariant: null
+      };
+      continue;
+    }
+    main = line.match(/^(\d+)\s+(.+?)\s+(\d+)\s+([\d.,]+)\s*€\s+([\d.,]+)\s*€\s*$/);
+    if (main) {
+      flush();
+      current = {
+        pos: parseInt(main[1]),
+        rawLabel: main[2].trim(),
+        quantity: parseInt(main[3]),
+        unitPrice: toCents(parseGermanNumber(main[4])),
+        totalPrice: toCents(parseGermanNumber(main[5])),
+        rawSize: null,
+        rawVariant: null
+      };
+      continue;
+    }
+    main = line.match(/^(\d+)\s*[xX]\s+(.+?)\s+([\d.,]+)\s*€(?:\s+([\d.,]+)\s*€)?\s*$/);
+    if (main) {
+      flush();
+      current = {
+        pos: pos++,
+        rawLabel: main[2].trim(),
+        quantity: parseInt(main[1]),
+        unitPrice: toCents(parseGermanNumber(main[3])),
+        totalPrice: toCents(parseGermanNumber(main[4] || (parseGermanNumber(main[3]) * parseInt(main[1])))),
+        rawSize: null,
+        rawVariant: null
+      };
+      continue;
+    }
+    main = line.match(/^(.+?)\s+(\d+)\s*[xX]\s+([\d.,]+)\s*€(?:\s+([\d.,]+)\s*€)?\s*$/);
+    if (main) {
+      flush();
+      current = {
+        pos: pos++,
+        rawLabel: main[1].trim(),
+        quantity: parseInt(main[2]),
+        unitPrice: toCents(parseGermanNumber(main[3])),
+        totalPrice: toCents(parseGermanNumber(main[4] || (parseGermanNumber(main[3]) * parseInt(main[2])))),
+        rawSize: null,
+        rawVariant: null
+      };
+      continue;
+    }
+    parseAttributeLine(line, current);
+  }
+  flush();
+  return result;
+}
+
 function parseInvoiceText(text) {
   const format = detectInvoiceFormat(text);
   if (format === 'mewa') return parseMewaInvoice(text);
@@ -704,6 +985,8 @@ function parseInvoiceText(text) {
   if (bandy.items.length > 0) return bandy;
   const mewa = parseMewaInvoice(text);
   if (mewa.items.length > 0) return mewa;
+  const generic = parseGenericInvoice(text);
+  if (generic.items.length > 0) return generic;
   return bandy;
 }
 
@@ -776,6 +1059,235 @@ function matchLine(rawLine, supplierId) {
   return { status: 'needs_review', score: 0, articleId: null, note: 'Kein Treffer' };
 }
 
+let invoicePreview = null;
+
+function summarizeImportLines(lines) {
+  return {
+    total: lines.length,
+    auto: lines.filter(line => line.matchStatus === 'auto').length,
+    suggest: lines.filter(line => line.matchStatus === 'suggest').length,
+    manual: lines.filter(line => line.matchStatus === 'manual').length,
+    need: lines.filter(line => line.matchStatus === 'needs_review' || !line.matchedArticleId).length,
+    resolved: lines.filter(line => !!line.matchedArticleId).length
+  };
+}
+
+function ensureParsedInvoiceIsImportable(parsed) {
+  if (!parsed || !Array.isArray(parsed.items) || parsed.items.length === 0) {
+    return 'Keine Positionen erkannt. Bitte Tabellenkopf oder Rechnungsaufbau prüfen.';
+  }
+  if (importBehaviorSettings().requireInvoiceNumber && !parsed.invoiceNo) {
+    return 'Rechnungsnummer fehlt. In den Einstellungen kann die Pflicht abgeschaltet werden.';
+  }
+  if (parsed.invoiceNo) {
+    const existing = findExistingImport(parsed.invoiceNo);
+    if (existing) return `Rechnung ${parsed.invoiceNo} existiert bereits (${existing.status}).`;
+  }
+  return null;
+}
+
+function buildInvoicePreview(text) {
+  const parsed = parseInvoiceText(text);
+  const supplier = parsed.supplierName ? findSupplierByName(parsed.supplierName) : null;
+  const lines = parsed.items.map(item => {
+    const match = matchLine(item, supplier?.id || null);
+    return {
+      ...item,
+      matchStatus: match.status,
+      matchScore: match.score,
+      matchedArticleId: match.articleId,
+      note: match.note
+    };
+  });
+  return {
+    parsed,
+    supplier,
+    lines,
+    summary: summarizeImportLines(lines),
+    warning: ensureParsedInvoiceIsImportable(parsed)
+  };
+}
+
+function renderInvoicePreview(preview) {
+  const box = $('#importPreview');
+  if (!box) return;
+  if (!preview) {
+    box.innerHTML = '';
+    return;
+  }
+  const supplierText = preview.supplier
+    ? `${escapeHtml(preview.supplier.name)} <span class="pill green">bekannt</span>`
+    : (preview.parsed.supplierName ? `${escapeHtml(preview.parsed.supplierName)} <span class="pill yellow">neu</span>` : '—');
+  box.innerHTML = `
+    <div class="card" style="margin-top:14px;">
+      <div class="toolbar">
+        <h2 style="margin:0;">Analyse</h2>
+        <div class="spacer"></div>
+        <span class="pill green">${preview.summary.auto} auto</span>
+        <span class="pill yellow">${preview.summary.suggest} Vorschlag</span>
+        <span class="pill red">${preview.summary.need} offen</span>
+      </div>
+      ${preview.warning ? `<div class="empty" style="margin:10px 0; border-left:3px solid #f59e0b;">${escapeHtml(preview.warning)}</div>` : ''}
+      <div class="grid-3" style="margin-top:10px;">
+        <div><label>Format</label><div>${escapeHtml(preview.parsed.format || 'auto')}</div></div>
+        <div><label>Rechnungsnummer</label><div>${escapeHtml(preview.parsed.invoiceNo || '—')}</div></div>
+        <div><label>Rechnungsdatum</label><div>${fmtDate(preview.parsed.invoiceDate)}</div></div>
+        <div><label>Lieferant</label><div>${supplierText}</div></div>
+        <div><label>Positionen</label><div>${preview.summary.total}</div></div>
+        <div><label>Auflösbar</label><div>${preview.summary.resolved}/${preview.summary.total}</div></div>
+      </div>
+      <div class="scroll-x" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Pos</th><th>Erkannter Artikel</th><th class="num">Menge</th><th>Status</th><th>Treffer</th></tr></thead>
+          <tbody>
+            ${preview.lines.map(line => {
+              const art = state.articles.find(article => article.id === line.matchedArticleId);
+              return `
+                <tr>
+                  <td>${line.pos ?? '—'}</td>
+                  <td>
+                    <strong>${escapeHtml(line.rawLabel || '—')}</strong>
+                    ${line.rawSize ? `<div class="help">Größe: ${escapeHtml(line.rawSize)}</div>` : ''}
+                    ${line.rawVariant ? `<div class="help">Variante: ${escapeHtml(line.rawVariant)}</div>` : ''}
+                  </td>
+                  <td class="num">${line.quantity || 0}</td>
+                  <td>
+                    ${line.matchStatus === 'auto' ? '<span class="pill green">automatisch</span>' :
+                      line.matchStatus === 'suggest' ? '<span class="pill yellow">Vorschlag</span>' :
+                      '<span class="pill red">prüfen</span>'}
+                  </td>
+                  <td>${art ? `${escapeHtml(art.internalName)}${art.size ? ' · ' + escapeHtml(art.size) : ''}` : escapeHtml(line.note || 'Kein Treffer')}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function createSupplierFromImport(imp) {
+  if (!imp?.supplierName) return null;
+  const existing = findSupplierByName(imp.supplierName);
+  if (existing) {
+    imp.supplierId = existing.id;
+    return { supplier: existing, created: false };
+  }
+  const supplier = {
+    id: nextId(),
+    name: imp.supplierName,
+    shortName: imp.supplierName.split(/\s+/)[0] || null,
+    address: null,
+    taxId: null,
+    vatId: null,
+    email: null,
+    phone: null,
+    website: null,
+    notes: imp.invoiceNo ? `Automatisch aus Rechnung ${imp.invoiceNo}` : 'Automatisch aus Rechnung angelegt'
+  };
+  state.suppliers.push(supplier);
+  imp.supplierId = supplier.id;
+  audit('AUTO_CREATE_SUPPLIER_FROM_IMPORT', 'supplier', supplier.id, null, { importId: imp.id });
+  return { supplier, created: true };
+}
+
+function createImportFromParsed(parsed, rawText) {
+  const err = ensureParsedInvoiceIsImportable(parsed);
+  if (err) throw new Error(err);
+  const supplier = parsed.supplierName ? findSupplierByName(parsed.supplierName) : null;
+  const imp = {
+    id: nextId(),
+    supplierId: supplier?.id || null,
+    supplierName: parsed.supplierName,
+    invoiceNo: parsed.invoiceNo,
+    invoiceDate: parsed.invoiceDate,
+    rawText,
+    status: 'parsed',
+    createdAt: todayISO()
+  };
+  state.imports.push(imp);
+  audit('CREATE_IMPORT', 'import', imp.id, null, {
+    supplierName: imp.supplierName,
+    invoiceNo: imp.invoiceNo,
+    invoiceDate: imp.invoiceDate
+  });
+  parsed.items.forEach(item => {
+    const match = matchLine(item, imp.supplierId);
+    state.importLines.push({
+      id: nextId(),
+      importId: imp.id,
+      pos: item.pos,
+      rawLabel: item.rawLabel,
+      rawSize: item.rawSize,
+      rawVariant: item.rawVariant,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+      matchStatus: match.status,
+      matchScore: match.score,
+      matchedArticleId: match.articleId,
+      note: match.note
+    });
+  });
+  return imp;
+}
+
+function autoCreateArticleForImportLine(line, imp) {
+  const cfg = appSettings();
+  const rules = inventoryRulesSettings();
+  if (rules.requireLocationForNewArticle && !cfg.defaultLocation) {
+    return { article: null, error: 'Standard-Lagerort fehlt' };
+  }
+  if (rules.requireMinStockForNewArticle && !(Number(cfg.defaultMinStock) > 0)) {
+    return { article: null, error: 'Standard-Mindestbestand fehlt' };
+  }
+  const article = { id: nextId(), ...buildImportArticleDraft(line, imp) };
+  state.articles.push(article);
+  line.matchedArticleId = article.id;
+  line.matchStatus = 'manual';
+  line.matchScore = 100;
+  line.note = 'Automatisch neu angelegt';
+  audit('AUTO_CREATE_ARTICLE_FROM_IMPORT', 'article', article.id, null, { importId: imp.id, importLineId: line.id });
+  return { article, error: null };
+}
+
+async function applyAutoImportRules(importId) {
+  const imp = state.imports.find(item => item.id === importId);
+  if (!imp) return { autoBooked: false, supplierCreated: false, suggestionsApproved: 0, articlesCreated: 0, blocked: [], unresolved: 0 };
+  const config = importBehaviorSettings();
+  const lines = state.importLines.filter(line => line.importId === importId);
+  let supplierCreated = false;
+  let suggestionsApproved = 0;
+  let articlesCreated = 0;
+  const blocked = [];
+
+  if (!imp.supplierId && imp.supplierName && config.autoCreateSupplier) {
+    supplierCreated = !!createSupplierFromImport(imp)?.created;
+  }
+  for (const line of lines) {
+    if (line.matchStatus === 'suggest' && config.autoApproveSuggestions && line.matchScore >= config.autoApproveScore) {
+      line.matchStatus = 'manual';
+      line.note = `Automatisch bestaetigt (${line.matchScore}%)`;
+      suggestionsApproved++;
+    }
+  }
+  for (const line of lines.filter(item => !item.matchedArticleId)) {
+    if (!config.autoCreateArticle) break;
+    const result = autoCreateArticleForImportLine(line, imp);
+    if (result.article) articlesCreated++;
+    else blocked.push(`Pos ${line.pos || '—'}: ${result.error}`);
+  }
+
+  const unresolved = lines.filter(line => !line.matchedArticleId).length;
+  const openSuggestions = lines.filter(line => line.matchStatus === 'suggest').length;
+  let autoBooked = false;
+  if (config.autoBookImportIfComplete && unresolved === 0 && openSuggestions === 0) {
+    autoBooked = await confirmImport(importId, { skipConfirm: true, successToast: false });
+  }
+  return { autoBooked, supplierCreated, suggestionsApproved, articlesCreated, blocked, unresolved };
+}
+
 /* =========================================================================
    ROUTING
    ========================================================================= */
@@ -794,7 +1306,7 @@ function movementStockDelta(m) {
 
 function validateImportedState(obj) {
   if (!obj || typeof obj !== 'object') return 'JSON enthält kein Objekt.';
-  const requiredArrays = ['suppliers','articles','aliases','employees','imports','importLines','movements','assignments'];
+  const requiredArrays = STATE_ARRAY_KEYS;
   for (const key of requiredArrays) {
     if (!Array.isArray(obj[key])) return `Pflichtbereich "${key}" fehlt oder ist keine Liste.`;
   }
@@ -825,9 +1337,10 @@ function validateImportedState(obj) {
     const fromMovements = obj.movements
       .filter(m => m.articleId === art.id)
       .reduce((sum, m) => sum + movementStockDelta(m), 0);
-    if (fromMovements !== (art.stock || 0)) {
+    const storedStock = articleStockValue(art);
+    if (fromMovements !== storedStock) {
       const name = art.internalName || `ID ${art.id}`;
-      return `Bestand „${name}" (${art.stock}) weicht von Bewegungen ab (${fromMovements}).`;
+      return `Bestand „${name}" (${storedStock}) weicht von Bewegungen ab (${fromMovements}).`;
     }
   }
   return null;
@@ -1197,9 +1710,10 @@ function renderInventory() {
 
 /* ---------- Import: Datei hochladen / Text einfügen ---------- */
 function renderImport() {
+  const importCfg = importBehaviorSettings();
   const v = $('#view');
   v.innerHTML = `
-    <p class="lead">Lade eine Rechnung als <code>.txt</code>-Datei hoch oder kopiere den Text aus der Rechnung in das Feld unten. Unterstützt <strong>Bandyshirt</strong> und <strong>MEWA</strong>. Das System erkennt Lieferant, Rechnungsnummer und Positionen, ordnet bekannte Artikel automatisch zu und markiert unklare Zeilen zur Prüfung. <strong>Es wird nichts gebucht, bevor du bestätigst.</strong></p>
+    <p class="lead">Lade eine Rechnung als <code>.txt</code>-Datei hoch oder kopiere den Text aus der Rechnung in das Feld unten. Die App erkennt Lieferant, Rechnungsnummer und Positionen, ordnet bekannte Artikel zu und kann auf Wunsch neue Lieferanten und Artikel automatisch anlegen. <strong>Per Schnelluebernahme wird der komplette Workflow anhand deiner Einstellungen abgearbeitet.</strong></p>
 
     <div class="card">
       <div class="grid-2">
@@ -1216,26 +1730,47 @@ function renderImport() {
           </div>
         </div>
       </div>
+      <div class="empty" style="margin-top:14px; text-align:left;">
+        <strong>Schnelluebernahme aktiv:</strong>
+        ${importCfg.autoCreateSupplier ? 'Lieferant auto' : 'Lieferant manuell'} ·
+        ${importCfg.autoCreateArticle ? 'Artikel auto' : 'Artikel manuell'} ·
+        ${importCfg.autoApproveSuggestions ? `Vorschlaege ab ${importCfg.autoApproveScore}% auto` : 'Vorschlaege manuell'} ·
+        ${importCfg.autoBookImportIfComplete ? 'Auto-Buchung an' : 'Auto-Buchung aus'}
+      </div>
       <hr class="sep">
       <div class="field">
         <label>Rechnungstext</label>
         <textarea id="invoiceText" rows="14" placeholder="Hier den kompletten Rechnungstext einfügen …"></textarea>
       </div>
       <div class="actions">
-        <button onclick="parseAndCreateImport()">Erkennen &amp; weiter zur Prüfung</button>
-        <button class="sec" onclick="$('#invoiceText').value=''">Leeren</button>
+        <button class="sec" onclick="analyzeInvoiceText()">Analysieren</button>
+        <button onclick="parseAndCreateImport('review')">Erkennen &amp; zur Prüfung</button>
+        <button onclick="parseAndCreateImport('smart')">Schnelluebernahme</button>
+        <button class="sec" onclick="$('#invoiceText').value=''; invoicePreview=null; renderInvoicePreview(null);">Leeren</button>
+        <button class="sec" onclick="navigate('settings')">Import-Regeln</button>
       </div>
     </div>
+    <div id="importPreview"></div>
   `;
   $('#fileInput').onchange = (e) => {
     const f = e.target.files[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => { $('#invoiceText').value = r.result; };
+    r.onload = () => {
+      $('#invoiceText').value = r.result;
+      invoicePreview = null;
+      renderInvoicePreview(null);
+    };
     r.readAsText(f, 'utf-8');
   };
+  $('#invoiceText').addEventListener('input', () => {
+    invoicePreview = null;
+    renderInvoicePreview(null);
+  });
 }
 
 function loadSampleInvoice(format='bandyshirt') {
+  invoicePreview = null;
+  renderInvoicePreview(null);
   if (format === 'mewa') {
     $('#invoiceText').value = `MEWA AG
 Hermann-Gebauer-Str. 1
@@ -1296,64 +1831,64 @@ zzgl. 19% MwSt. 88,01 €
 Gesamtsumme: 551,22 €`;
 }
 
-function parseAndCreateImport() {
+function analyzeInvoiceText() {
   const text = $('#invoiceText').value;
   if (!text || text.trim().length < 20) { toast('Bitte Rechnungstext einfügen.', 'error'); return; }
-  const parsed = parseInvoiceText(text);
-  if (parsed.items.length === 0) {
-    toast('Keine Positionen erkannt. Bitte Tabellenkopf prüfen (Bandyshirt oder MEWA).', 'error');
+  invoicePreview = buildInvoicePreview(text);
+  renderInvoicePreview(invoicePreview);
+  if (invoicePreview.lines.length === 0) {
+    toast('Keine Positionen erkannt. Bitte Rechnungsaufbau pruefen.', 'error');
     return;
   }
-  if (parsed.invoiceNo) {
-    const existing = findExistingImport(parsed.invoiceNo);
-    if (existing) {
-      toast(`Rechnung ${parsed.invoiceNo} existiert bereits (${existing.status}).`, 'error');
-      navigate('review/' + existing.id);
-      return;
+  if (invoicePreview.warning) {
+    toast(invoicePreview.warning, 'error');
+    return;
+  }
+  toast(`Analyse fertig: ${invoicePreview.summary.total} Position(en) erkannt.`, 'success');
+}
+
+async function parseAndCreateImport(mode='review') {
+  const text = $('#invoiceText').value;
+  if (!text || text.trim().length < 20) { toast('Bitte Rechnungstext einfügen.', 'error'); return; }
+  const preview = buildInvoicePreview(text);
+  invoicePreview = preview;
+  renderInvoicePreview(preview);
+  if (preview.warning) {
+    toast(preview.warning, 'error');
+    if (preview.parsed.invoiceNo) {
+      const existing = findExistingImport(preview.parsed.invoiceNo);
+      if (existing) navigate('review/' + existing.id);
     }
+    return;
   }
-  // Lieferant zuordnen oder behalten
-  let supplierId = null;
-  if (parsed.supplierName) {
-    const found = state.suppliers.find(s => s.name.toLowerCase() === parsed.supplierName.toLowerCase());
-    if (found) supplierId = found.id;
+
+  let imp;
+  try {
+    imp = createImportFromParsed(preview.parsed, text);
+  } catch (err) {
+    toast(err.message || 'Import konnte nicht angelegt werden.', 'error');
+    return;
   }
-  // Import anlegen
-  const importId = nextId();
-  const imp = {
-    id: importId,
-    supplierId,
-    supplierName: parsed.supplierName,
-    invoiceNo: parsed.invoiceNo,
-    invoiceDate: parsed.invoiceDate,
-    rawText: text,
-    status: 'parsed',
-    createdAt: todayISO()
-  };
-  state.imports.push(imp);
-  // Zeilen anlegen + matchen
-  parsed.items.forEach(item => {
-    const m = matchLine(item, supplierId);
-    state.importLines.push({
-      id: nextId(),
-      importId,
-      pos: item.pos,
-      rawLabel: item.rawLabel,
-      rawSize: item.rawSize,
-      rawVariant: item.rawVariant,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      matchStatus: m.status,
-      matchScore: m.score,
-      matchedArticleId: m.articleId,
-      note: m.note
-    });
-  });
+
+  let autoResult = null;
+  if (mode === 'smart') {
+    autoResult = await applyAutoImportRules(imp.id);
+  }
   persist();
-  const fmt = parsed.format ? ` (${parsed.format})` : '';
-  toast(`Import angelegt mit ${parsed.items.length} Positionen${fmt}.`, 'success');
-  navigate('review/' + importId);
+  const fmt = preview.parsed.format ? ` (${preview.parsed.format})` : '';
+  if (mode === 'smart' && autoResult) {
+    const parts = [];
+    if (autoResult.supplierCreated) parts.push('Lieferant angelegt');
+    if (autoResult.articlesCreated) parts.push(`${autoResult.articlesCreated} Artikel angelegt`);
+    if (autoResult.suggestionsApproved) parts.push(`${autoResult.suggestionsApproved} Vorschlaege bestaetigt`);
+    if (autoResult.autoBooked) parts.push('Import direkt gebucht');
+    if (autoResult.blocked.length) parts.push(`${autoResult.blocked.length} Regel-Blocker`);
+    toast(parts.length ? parts.join(' · ') : `Import angelegt${fmt}.`, autoResult.blocked.length ? 'error' : 'success');
+    navigate(autoResult.autoBooked ? 'imports' : 'review/' + imp.id);
+    return;
+  }
+  toast(`Import angelegt mit ${preview.parsed.items.length} Positionen${fmt}.`, 'success');
+  navigate('review/' + imp.id);
 }
 
 /* ---------- Import: Liste ---------- */
@@ -1417,10 +1952,13 @@ function renderImportReview(idStr) {
   const imp = state.imports.find(i => i.id === id);
   if (!imp) { $('#view').innerHTML = '<div class="empty">Import nicht gefunden.</div>'; return; }
   const lines = state.importLines.filter(l => l.importId === id).sort((a,b) => a.pos - b.pos);
+  const summary = summarizeImportLines(lines);
   const v = $('#view');
 
   const supplier = state.suppliers.find(s => s.id === imp.supplierId);
-  const supplierLabel = supplier ? supplier.name : (imp.supplierName ? `${imp.supplierName} <button class="ghost small" onclick="adoptSupplier(${imp.id})">als Lieferanten anlegen</button>` : 'unbekannt');
+  const supplierLabel = supplier
+    ? escapeHtml(supplier.name)
+    : (imp.supplierName ? `${escapeHtml(imp.supplierName)} <button class="ghost small" onclick="adoptSupplier(${imp.id})">als Lieferanten anlegen</button>` : 'unbekannt');
 
   v.innerHTML = `
     <div class="card">
@@ -1434,9 +1972,13 @@ function renderImportReview(idStr) {
       <div class="toolbar">
         <h2 style="margin:0;">Positionen (${lines.length})</h2>
         <div class="spacer"></div>
-        <span class="pill green">${lines.filter(l=>l.matchStatus==='auto').length} auto</span>
-        <span class="pill yellow">${lines.filter(l=>l.matchStatus==='suggest').length} prüfen</span>
-        <span class="pill red">${lines.filter(l=>l.matchStatus==='needs_review').length} unklar</span>
+        <span class="pill green">${summary.auto} auto</span>
+        <span class="pill yellow">${summary.suggest} prüfen</span>
+        <span class="pill red">${summary.need} offen</span>
+      </div>
+      <div class="empty" style="margin:10px 0; text-align:left;">
+        <strong>Schnellcheck:</strong> ${summary.resolved}/${summary.total} Positionen zugeordnet.
+        ${imp.status === 'parsed' ? ' Solange offene Positionen oder unbestaetigte Vorschlaege vorhanden sind, wird nichts gebucht.' : ''}
       </div>
       <div class="scroll-x">
         <table>
@@ -1491,11 +2033,12 @@ function renderImportReview(idStr) {
       </div>
       <hr class="sep">
       <div class="actions" style="justify-content:flex-end;">
+        <button class="sec" onclick="autoCompleteImport(${imp.id})">Automatisch vervollstaendigen</button>
         <button class="sec" onclick="cancelImport(${imp.id})">Import verwerfen</button>
         <button onclick="confirmImport(${imp.id})">Wareneingang buchen</button>
       </div>
       <div class="help" style="margin-top:6px;">
-        Gelbe Vorschläge müssen mit „Vorschlag bestätigen" freigegeben werden. Beim Buchen werden Bestände erhöht, der letzte Einkaufspreis aktualisiert und manuelle Zuordnungen als Aliase gelernt.
+        Gelbe Vorschlaege muessen nur bestaetigt werden, wenn deine Import-Regeln keine Auto-Freigabe erlauben. Beim Buchen werden Bestaende erhoeht, der letzte Einkaufspreis aktualisiert und manuelle Zuordnungen als Aliase gelernt.
       </div>
     </div>
   `;
@@ -1504,12 +2047,24 @@ function renderImportReview(idStr) {
 function adoptSupplier(importId) {
   const imp = state.imports.find(i => i.id === importId);
   if (!imp || !imp.supplierName) return;
-  const id = nextId();
-  state.suppliers.push({ id, name: imp.supplierName });
-  imp.supplierId = id;
+  const result = createSupplierFromImport(imp);
+  if (!result?.supplier) return;
   persist();
-  toast('Lieferant angelegt.', 'success');
+  toast(result.created ? 'Lieferant angelegt.' : 'Lieferant zugeordnet.', 'success');
   navigate('review/' + importId);
+}
+
+async function autoCompleteImport(importId) {
+  const result = await applyAutoImportRules(importId);
+  persist();
+  const parts = [];
+  if (result.supplierCreated) parts.push('Lieferant angelegt');
+  if (result.articlesCreated) parts.push(`${result.articlesCreated} Artikel angelegt`);
+  if (result.suggestionsApproved) parts.push(`${result.suggestionsApproved} Vorschlaege bestaetigt`);
+  if (result.autoBooked) parts.push('Import direkt gebucht');
+  if (result.blocked.length) parts.push(`${result.blocked.length} Blocker`);
+  toast(parts.length ? parts.join(' · ') : 'Keine automatische Aenderung moeglich.', result.blocked.length ? 'error' : 'success');
+  navigate(result.autoBooked ? 'imports' : 'review/' + importId);
 }
 
 function confirmSuggestLine(lineId) {
@@ -1563,21 +2118,27 @@ async function assignArticleToLine(lineId) {
 function newArticleFromLine(lineId) {
   const line = state.importLines.find(l => l.id === lineId);
   if (!line) return;
+  const imp = state.imports.find(item => item.id === line.importId);
+  const draft = buildImportArticleDraft(line, imp);
   const div = document.createElement('div');
   div.innerHTML = `
-    <div class="field"><label>Interne Bezeichnung</label><input id="iname" value="${escapeHtml(line.rawLabel.replace(/^#?[A-Z0-9-]+\s*/, ''))}"></div>
+    <div class="field"><label>Interne Bezeichnung</label><input id="iname" value="${escapeHtml(draft.internalName)}"></div>
     <div class="grid-2">
-      <div class="field"><label>Kategorie</label><select id="icat">${categoryOptions('arbeitskleidung')}</select></div>
-      <div class="field"><label>Einheit</label><select id="iunit">${unitOptions('Stück')}</select></div>
+      <div class="field"><label>Kategorie</label><select id="icat">${categoryOptions(draft.category)}</select></div>
+      <div class="field"><label>Einheit</label><select id="iunit">${unitOptions(draft.unit)}</select></div>
+      <div class="field"><label>Artikelnummer / SKU</label><input id="iartno" value="${escapeHtml(draft.articleNumber || '')}"></div>
+      <div class="field"><label>Lieferant</label><input id="isupplier" value="${escapeHtml(draft.supplier || '')}"></div>
     </div>
     <div class="grid-2">
-      <div class="field"><label>Größe</label><input id="isize" value="${escapeHtml(line.rawSize||'')}"></div>
-      <div class="field"><label>Variante</label><input id="ivar" value="${escapeHtml(line.rawVariant||'')}"></div>
+      <div class="field"><label>Größe</label><input id="isize" value="${escapeHtml(draft.size||'')}"></div>
+      <div class="field"><label>Variante</label><input id="ivar" value="${escapeHtml(draft.variant||'')}"></div>
     </div>
     <div class="grid-2">
-      <div class="field"><label>Mindestbestand</label><input id="imin" type="number" value="0" min="0"></div>
-      <div class="field"><label>Lagerort</label><input id="iloc"></div>
+      <div class="field"><label>Mindestbestand</label><input id="imin" type="number" value="${draft.minStock || 0}" min="0"></div>
+      <div class="field"><label>Lagerort</label><input id="iloc" value="${escapeHtml(draft.location || '')}"></div>
+      <div class="field"><label>Letzter EK (€)</label><input id="iprice" value="${draft.lastPurchasePrice ? (draft.lastPurchasePrice / 100).toFixed(2).replace('.', ',') : ''}"></div>
     </div>
+    <div class="field"><label>Notizen</label><textarea id="inotes" rows="3">${escapeHtml(draft.notes || '')}</textarea></div>
   `;
   modal({
     title: 'Neuen Artikel anlegen',
@@ -1588,24 +2149,32 @@ function newArticleFromLine(lineId) {
     ]
   }).then(ok => {
     if (!ok) return;
-    const id = nextId();
+    const rules = inventoryRulesSettings();
     const cat = div.querySelector('#icat').value;
+    const location = div.querySelector('#iloc').value.trim() || null;
+    const minStock = parseInt(div.querySelector('#imin').value) || 0;
+    if (rules.requireLocationForNewArticle && !location) { toast('Lagerort ist laut Einstellungen Pflicht.', 'error'); return; }
+    if (rules.requireMinStockForNewArticle && minStock <= 0) { toast('Mindestbestand ist laut Einstellungen Pflicht.', 'error'); return; }
     const article = {
-      id,
+      id: nextId(),
       internalName: div.querySelector('#iname').value.trim() || line.rawLabel,
+      articleNumber: div.querySelector('#iartno').value.trim() || null,
+      ean: null,
+      supplier: div.querySelector('#isupplier').value.trim() || null,
+      notes: div.querySelector('#inotes').value.trim() || null,
       category: cat,
       size: div.querySelector('#isize').value.trim() || null,
       variant: div.querySelector('#ivar').value.trim() || null,
       unit: div.querySelector('#iunit').value,
       stock: 0,
-      minStock: parseInt(div.querySelector('#imin').value) || 0,
-      location: div.querySelector('#iloc').value.trim() || null,
-      lastPurchasePrice: null,
+      minStock,
+      location,
+      lastPurchasePrice: parseGermanNumber(div.querySelector('#iprice').value) != null ? toCents(parseGermanNumber(div.querySelector('#iprice').value)) : draft.lastPurchasePrice,
       personalAssignment: !!catInfo(cat).personal,
       active: true
     };
     state.articles.push(article);
-    line.matchedArticleId = id;
+    line.matchedArticleId = article.id;
     line.matchStatus = 'manual';
     line.matchScore = 100;
     line.note = 'Neu angelegt';
@@ -1615,30 +2184,31 @@ function newArticleFromLine(lineId) {
   });
 }
 
-async function confirmImport(importId) {
+async function confirmImport(importId, options={}) {
   if (!requirePermission('import', 'Nur Office & Admin dürfen Importe bestätigen.')) return;
+  const { skipConfirm = false, successToast = true } = options;
   const imp = state.imports.find(i => i.id === importId);
-  if (!imp) return;
+  if (!imp) return false;
   if (imp.status === 'confirmed') {
     toast('Import wurde bereits gebucht.', 'error');
-    return;
+    return false;
   }
   if (imp.status === 'cancelled') {
     toast('Import wurde verworfen.', 'error');
-    return;
+    return false;
   }
   const lines = state.importLines.filter(l => l.importId === importId);
   const unresolved = lines.filter(l => !l.matchedArticleId);
   if (unresolved.length > 0) {
     toast(`${unresolved.length} Position(en) noch nicht zugeordnet.`, 'error');
-    return;
+    return false;
   }
   const unconfirmedSuggest = lines.filter(l => l.matchStatus === 'suggest');
   if (unconfirmedSuggest.length > 0) {
     toast(`${unconfirmedSuggest.length} Vorschlag/Vorschläge müssen erst bestätigt werden.`, 'error');
-    return;
+    return false;
   }
-  if (!await confirmDialog(`${lines.length} Position(en) buchen und Bestände erhöhen?`)) return;
+  if (!skipConfirm && !await confirmDialog(`${lines.length} Position(en) buchen und Bestände erhöhen?`)) return false;
 
   let aliasesLearned = 0;
   for (const line of lines) {
@@ -1683,8 +2253,9 @@ async function confirmImport(importId) {
   imp.confirmedAt = todayISO();
   audit('IMPORT_CONFIRMED', 'import', importId, {status:'parsed'}, {status:'confirmed', lines: lines.length});
   persist();
-  toast(`${lines.length} Bewegungen gebucht. ${aliasesLearned} neue Aliase gelernt.`, 'success');
-  navigate('imports');
+  if (successToast) toast(`${lines.length} Bewegungen gebucht. ${aliasesLearned} neue Aliase gelernt.`, 'success');
+  if (!skipConfirm) navigate('imports');
+  return true;
 }
 
 async function cancelImport(importId) {
@@ -1811,6 +2382,7 @@ function renderCorrection() {
 
 async function bookCorrection() {
   if (!requirePermission('stock', 'Nur Lager & Admin dürfen Korrekturen buchen.')) return;
+  const rules = inventoryRulesSettings();
   const aid = parseInt($('#kArt').value);
   const delta = parseInt($('#kDelta').value, 10);
   const date = $('#kDate').value || todayISO();
@@ -1820,6 +2392,7 @@ async function bookCorrection() {
   const art = state.articles.find(a => a.id === aid);
   if (!art) return;
   if (delta < 0 && art.stock + delta < 0) {
+    if (rules.preventNegativeStock) { toast(`Negative Bestaende sind gesperrt (waere ${art.stock + delta}).`, 'error'); return; }
     if (!await confirmDialog(`Bestand würde negativ (${art.stock + delta}). Trotzdem buchen?`)) return;
   }
   const before = art.stock;
@@ -1901,6 +2474,7 @@ function renderIssue() {
 
 async function bookIssue() {
   if (!requirePermission('stock', 'Nur Lager & Admin dürfen Ausgaben buchen.')) return;
+  const rules = inventoryRulesSettings();
   const eid = parseInt($('#iEmp').value);
   const aid = parseInt($('#iArt').value);
   const qty = parseInt($('#iQty').value);
@@ -1910,6 +2484,7 @@ async function bookIssue() {
   const art = state.articles.find(a => a.id === aid);
   if (!art) return;
   if (qty > art.stock) {
+    if (rules.preventNegativeStock) { toast(`Bestand reicht nicht aus (vorhanden: ${art.stock}).`, 'error'); return; }
     if (!await confirmDialog(`Bestand reicht nicht (vorhanden: ${art.stock}). Trotzdem buchen?`)) return;
   }
   art.stock -= qty;
@@ -2242,6 +2817,7 @@ function renderArticlesList() {
 function editArticle(id, preset) {
   if (!requirePermission('write', 'Nur Office & Admin dürfen Artikel bearbeiten.')) return;
   const cfg = appSettings();
+  const rules = inventoryRulesSettings();
   const art = id ? state.articles.find(a => a.id === id) : {
     internalName: preset?.internalName || '',
     articleNumber: preset?.articleNumber || '',
@@ -2319,6 +2895,8 @@ function editArticle(id, preset) {
       active: true
     };
     if (!data.internalName) { toast('Bezeichnung ist Pflicht.', 'error'); return; }
+    if (rules.requireLocationForNewArticle && !data.location) { toast('Lagerort ist laut Einstellungen Pflicht.', 'error'); return; }
+    if (rules.requireMinStockForNewArticle && data.minStock <= 0) { toast('Mindestbestand ist laut Einstellungen Pflicht.', 'error'); return; }
     if (id) Object.assign(art, data);
     else {
       const start = parseInt(div.querySelector('#istart').value) || 0;
@@ -2421,6 +2999,8 @@ function renderArticleDetail(idStr) {
 function renderSettings() {
   const isAdmin = can('admin');
   const s = appSettings();
+  const importCfg = importBehaviorSettings();
+  const rules = inventoryRulesSettings();
   const u = currentUser();
   const customCats = state.meta.customCategories || [];
   const customUnits = state.meta.customUnits || [];
@@ -2445,6 +3025,31 @@ function renderSettings() {
         <div class="field"><label>Standard-Kategorie</label><select id="setCat">${categoryOptions(s.defaultCategory)}</select></div>
         <div class="field"><label>Standard-Einheit</label><select id="setUnit">${unitOptions(s.defaultUnit)}</select></div>
         <div class="field"><label>Standard-Mindestbestand</label><input id="setMin" type="number" min="0" value="${s.defaultMinStock || 0}"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Import-Automation</h2>
+      <p class="help">Steuert, wie aggressiv Rechnungstexte automatisch verarbeitet werden sollen.</p>
+      <div class="grid-2">
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setAutoSupplier" ${importCfg.autoCreateSupplier ? 'checked' : ''} style="width:auto;"> Unbekannte Lieferanten automatisch anlegen</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setAutoArticle" ${importCfg.autoCreateArticle ? 'checked' : ''} style="width:auto;"> Nicht erkannte Artikel automatisch anlegen</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setAutoApprove" ${importCfg.autoApproveSuggestions ? 'checked' : ''} style="width:auto;"> Vorschläge automatisch bestätigen</label>
+        <div class="field"><label>Schwellwert Vorschläge (%)</label><input id="setAutoApproveScore" type="number" min="50" max="100" value="${importCfg.autoApproveScore || 92}"></div>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setAutoBook" ${importCfg.autoBookImportIfComplete ? 'checked' : ''} style="width:auto;"> Import automatisch buchen wenn alles aufgelöst ist</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setRequireInvoiceNo" ${importCfg.requireInvoiceNumber ? 'checked' : ''} style="width:auto;"> Rechnungsnummer verpflichtend</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setCopySku" ${importCfg.copySkuToArticleNumber ? 'checked' : ''} style="width:auto;"> SKU in Artikelnummer übernehmen</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setCopySupplier" ${importCfg.copySupplierToArticle ? 'checked' : ''} style="width:auto;"> Lieferant in neuen Artikeln vorbelegen</label>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;"><input type="checkbox" id="setCopyInvoiceNotes" ${importCfg.copyInvoiceToNotes ? 'checked' : ''} style="width:auto;"> Rechnungsinfo in Artikel-Notizen übernehmen</label>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Regeln &amp; Sicherheit</h2>
+      <div class="grid-2">
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setPreventNegative" ${rules.preventNegativeStock ? 'checked' : ''} style="width:auto;"> Negative Bestände komplett verhindern</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setRequireLocationArticle" ${rules.requireLocationForNewArticle ? 'checked' : ''} style="width:auto;"> Lagerort bei neuen Artikeln verpflichtend</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="setRequireMinArticle" ${rules.requireMinStockForNewArticle ? 'checked' : ''} style="width:auto;"> Mindestbestand bei neuen Artikeln verpflichtend</label>
       </div>
     </div>
 
@@ -2519,7 +3124,23 @@ function saveSettings() {
       brandSubtitle: $('#setBrandSub').value.trim(),
       defaultCategory: $('#setCat').value,
       defaultUnit: $('#setUnit').value,
-      defaultMinStock: parseInt($('#setMin').value) || 0
+      defaultMinStock: parseInt($('#setMin').value) || 0,
+      importBehavior: {
+        autoCreateSupplier: $('#setAutoSupplier').checked,
+        autoCreateArticle: $('#setAutoArticle').checked,
+        autoApproveSuggestions: $('#setAutoApprove').checked,
+        autoApproveScore: Math.min(100, Math.max(50, parseInt($('#setAutoApproveScore').value) || 92)),
+        autoBookImportIfComplete: $('#setAutoBook').checked,
+        requireInvoiceNumber: $('#setRequireInvoiceNo').checked,
+        copySkuToArticleNumber: $('#setCopySku').checked,
+        copySupplierToArticle: $('#setCopySupplier').checked,
+        copyInvoiceToNotes: $('#setCopyInvoiceNotes').checked
+      },
+      inventoryRules: {
+        preventNegativeStock: $('#setPreventNegative').checked,
+        requireLocationForNewArticle: $('#setRequireLocationArticle').checked,
+        requireMinStockForNewArticle: $('#setRequireMinArticle').checked
+      }
     };
     audit('UPDATE_SETTINGS', 'system', null, null, state.meta.settings);
   }
@@ -2803,16 +3424,17 @@ function renderSuppliers() {
   const refresh = () => {
     const q = $('#sSearch').value.toLowerCase();
     const rows = state.suppliers
-      .filter(s => !q || (s.name + ' ' + (s.address||'')).toLowerCase().includes(q))
+      .filter(s => !q || ([s.name, s.shortName, s.address, s.email, s.phone, s.website].join(' ')).toLowerCase().includes(q))
       .sort((a,b) => a.name.localeCompare(b.name));
     $('#sTable').innerHTML = `
-      <thead><tr><th>Name</th><th>Adresse</th><th>USt-Id</th><th>Aktionen</th></tr></thead>
+      <thead><tr><th>Name</th><th>Kurzname</th><th>Kontakt</th><th>USt-Id</th><th>Aktionen</th></tr></thead>
       <tbody>
-        ${rows.length === 0 ? '<tr><td colspan="4"><div class="empty"><div class="empty-ico">🚚</div><div>Keine Lieferanten</div></div></td></tr>' : rows.map(s => `
+        ${rows.length === 0 ? '<tr><td colspan="5"><div class="empty"><div class="empty-ico">🚚</div><div>Keine Lieferanten</div></div></td></tr>' : rows.map(s => `
           <tr>
             <td>${escapeHtml(s.name)}</td>
-            <td>${escapeHtml(s.address||'—')}</td>
-            <td>${escapeHtml(s.taxId||'—')}</td>
+            <td>${escapeHtml(s.shortName||'—')}</td>
+            <td>${escapeHtml(s.email || s.phone || s.website || s.address || '—')}</td>
+            <td>${escapeHtml(supplierTaxIdValue(s)||'—')}</td>
             <td><button class="ghost small" onclick="editSupplier(${s.id})">bearbeiten</button></td>
           </tr>
         `).join('')}
@@ -2825,13 +3447,19 @@ function renderSuppliers() {
 
 function editSupplier(id) {
   if (!requirePermission('write', 'Nur Office & Admin dürfen Lieferanten bearbeiten.')) return;
-  const sup = id ? state.suppliers.find(s => s.id === id) : { name:'', address:'', taxId:'', notes:'' };
+  const sup = id ? state.suppliers.find(s => s.id === id) : { name:'', shortName:'', address:'', taxId:'', email:'', phone:'', website:'', notes:'' };
   if (!sup) return;
   const div = document.createElement('div');
   div.innerHTML = `
     <div class="field"><label>Name</label><input id="sname" value="${escapeHtml(sup.name)}"></div>
+    <div class="field"><label>Kurzname</label><input id="sshort" value="${escapeHtml(sup.shortName||'')}"></div>
     <div class="field"><label>Adresse</label><input id="saddr" value="${escapeHtml(sup.address||'')}"></div>
-    <div class="field"><label>USt-IdNr.</label><input id="stax" value="${escapeHtml(sup.taxId||'')}"></div>
+    <div class="grid-2">
+      <div class="field"><label>USt-IdNr.</label><input id="stax" value="${escapeHtml(supplierTaxIdValue(sup)||'')}"></div>
+      <div class="field"><label>E-Mail</label><input id="semail" value="${escapeHtml(sup.email||'')}"></div>
+      <div class="field"><label>Telefon</label><input id="sphone" value="${escapeHtml(sup.phone||'')}"></div>
+      <div class="field"><label>Website</label><input id="sweb" value="${escapeHtml(sup.website||'')}"></div>
+    </div>
     <div class="field"><label>Notizen</label><textarea id="snotes" rows="3">${escapeHtml(sup.notes||'')}</textarea></div>
   `;
   modal({
@@ -2845,8 +3473,13 @@ function editSupplier(id) {
     if (!ok) return;
     const data = {
       name: div.querySelector('#sname').value.trim(),
+      shortName: div.querySelector('#sshort').value.trim() || null,
       address: div.querySelector('#saddr').value.trim() || null,
       taxId: div.querySelector('#stax').value.trim() || null,
+      vatId: div.querySelector('#stax').value.trim() || null,
+      email: div.querySelector('#semail').value.trim() || null,
+      phone: div.querySelector('#sphone').value.trim() || null,
+      website: div.querySelector('#sweb').value.trim() || null,
       notes: div.querySelector('#snotes').value.trim() || null
     };
     if (!data.name) { toast('Name ist Pflicht.', 'error'); return; }
@@ -2858,6 +3491,59 @@ function editSupplier(id) {
   });
 }
 
+function getDataHealthFindings() {
+  const openImports = state.imports.filter(imp => imp.status !== 'confirmed' && imp.status !== 'cancelled');
+  const unresolvedImportLines = state.importLines.filter(line => {
+    const imp = state.imports.find(item => item.id === line.importId);
+    return imp && imp.status !== 'confirmed' && imp.status !== 'cancelled' && !line.matchedArticleId;
+  });
+  const findings = [
+    {
+      severity: unresolvedImportLines.length ? 'red' : 'green',
+      label: 'Offene Import-Positionen',
+      count: unresolvedImportLines.length,
+      detail: unresolvedImportLines.length ? 'Noch nicht zugeordnete Rechnungspositionen in der Prüfqueue.' : 'Alle offenen Importe sind zugeordnet.',
+      href: '#imports'
+    },
+    {
+      severity: openImports.length ? 'yellow' : 'green',
+      label: 'Offene Importe',
+      count: openImports.length,
+      detail: openImports.length ? 'Importe warten noch auf Prüfung oder Buchung.' : 'Keine offenen Importe.',
+      href: '#imports'
+    },
+    {
+      severity: state.articles.filter(a => a.active !== false && !a.location).length ? 'yellow' : 'green',
+      label: 'Artikel ohne Lagerort',
+      count: state.articles.filter(a => a.active !== false && !a.location).length,
+      detail: 'Diese Artikel erschweren die physische Lagerzuordnung.',
+      href: '#articles'
+    },
+    {
+      severity: state.articles.filter(a => a.active !== false && a.personalAssignment && !a.size).length ? 'yellow' : 'green',
+      label: 'Personenartikel ohne Größe',
+      count: state.articles.filter(a => a.active !== false && a.personalAssignment && !a.size).length,
+      detail: 'Gerade Kleidung und Schuhe sollten eine Größe haben.',
+      href: '#articles'
+    },
+    {
+      severity: state.articles.filter(a => a.active !== false && !a.articleNumber).length ? 'yellow' : 'green',
+      label: 'Artikel ohne Artikelnummer',
+      count: state.articles.filter(a => a.active !== false && !a.articleNumber).length,
+      detail: 'SKU/Artikelnummer verbessert Importtreffer und Nachbestellung.',
+      href: '#articles'
+    },
+    {
+      severity: state.suppliers.filter(s => !supplierTaxIdValue(s)).length ? 'yellow' : 'green',
+      label: 'Lieferanten ohne USt-Id',
+      count: state.suppliers.filter(s => !supplierTaxIdValue(s)).length,
+      detail: 'Stammdaten für Lieferanten sind noch unvollständig.',
+      href: '#suppliers'
+    }
+  ];
+  return findings;
+}
+
 /* ---------- Daten verwalten ---------- */
 function renderDataView() {
   const v = $('#view');
@@ -2867,14 +3553,33 @@ function renderDataView() {
     aliases: state.aliases.length,
     employees: state.employees.length,
     imports: state.imports.length,
+    importLines: state.importLines.length,
     movements: state.movements.length,
-    assignments: state.assignments.length
+    assignments: state.assignments.length,
+    auditLog: state.auditLog.length
   };
+  const findings = getDataHealthFindings();
   v.innerHTML = `
     <div class="card">
       <h2>Datenbank-Status</h2>
       <table style="max-width:420px;">
         ${Object.entries(stats).map(([k,v]) => `<tr><td>${k}</td><td class="num">${v}</td></tr>`).join('')}
+      </table>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2>Systemcheck</h2>
+      <table>
+        <thead><tr><th>Prüfung</th><th class="num">Anzahl</th><th>Bewertung</th><th>Aktion</th></tr></thead>
+        <tbody>
+          ${findings.map(item => `
+            <tr class="${item.severity === 'red' ? 'row-danger' : ''}">
+              <td><strong>${escapeHtml(item.label)}</strong><div class="help">${escapeHtml(item.detail)}</div></td>
+              <td class="num">${item.count}</td>
+              <td><span class="pill ${item.severity}">${item.severity === 'green' ? 'OK' : item.severity === 'yellow' ? 'Prüfen' : 'Wichtig'}</span></td>
+              <td><a href="${item.href}">öffnen →</a></td>
+            </tr>
+          `).join('')}
+        </tbody>
       </table>
     </div>
     <div class="card" style="margin-top:14px;">
