@@ -283,6 +283,58 @@ const STORAGE_KEY = 'lagerverwaltung_v1';
 const STATE_ARRAY_KEYS = ['suppliers', 'articles', 'aliases', 'employees', 'imports', 'importLines', 'movements', 'assignments'];
 const STANDARD_UNITS = ['Stück', 'Paar', 'Packung', 'Karton'];
 const DEFAULT_CUSTOM_UNITS = ['Rolle', 'Paar'];
+const BUNDLED_PRODUCTION_JSON = `{"meta":{"nextId":300,"version":1,"users":[{"id":1,"name":"Marcin Panus","role":"admin"}],"currentUser":{"id":1,"name":"Marcin Panus","role":"admin"},"settings":{"companyName":"P&P Buntmetallhandel","defaultLocation":"","defaultMinStock":1,"defaultCategory":"arbeitskleidung","defaultUnit":"Stück","brandTitle":"Lagerverwaltung","brandSubtitle":"Arbeitskleidung & PSA"},"customCategories":[],"customUnits":["Rolle","Paar"]},"suppliers":[{"id":1,"name":"Strauss Deutschland GmbH & Co. KG","shortName":"Strauss","address":"Frankfurter Straße 98-108, D-63599 Biebergemünd","email":"info@strauss.de","phone":"+49 6050 9710-12","website":"strauss.de","vatId":"DE112494262","notes":"Kunden-Nr. K12008600 · SEPA-Lastschrift · 2% Skonto"},{"id":2,"name":"Krähe WORKWEAR GmbH & Co. KG","shortName":"Krähe","address":"Ulrich Gminder Straße 7, 72654 Neckartenzlingen","email":"","phone":"","website":"amazon.de (ASIN-Verkäufer)","vatId":"DE325246911","notes":"Bestellungen über Amazon · Amazon-Bestellnummer als Referenz"}],"articles":[{"id":10,"internalName":"Bundhose e.s.concrete light schwarz","articleNumber":"61501","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 61501 · Rechnung R184546200 vom 11.05.2026","category":"arbeitskleidung","size":"23","variant":"schwarz","unit":"Stück","stock":3,"minStock":1,"location":"","lastPurchasePrice":5990,"personalAssignment":true,"active":true},{"id":11,"internalName":"Bundhose e.s.concrete light schwarz","articleNumber":"61501","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 61501 · Rechnung R184546200 vom 11.05.2026","category":"arbeitskleidung","size":"44","variant":"schwarz","unit":"Stück","stock":3,"minStock":1,"location":"","lastPurchasePrice":5990,"personalAssignment":true,"active":true},{"id":12,"internalName":"Cargo-Short e.s.vintage schwarz","articleNumber":"66550","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 66550 · Rechnung R184546200 vom 11.05.2026","category":"arbeitskleidung","size":"54","variant":"schwarz","unit":"Stück","stock":1,"minStock":1,"location":"","lastPurchasePrice":5490,"personalAssignment":true,"active":true},{"id":13,"internalName":"Short e.s.t:aktik light ripstop schwarz","articleNumber":"62810","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 62810 · Rechnung R184546200 vom 11.05.2026","category":"arbeitskleidung","size":"44","variant":"schwarz","unit":"Stück","stock":2,"minStock":1,"location":"","lastPurchasePrice":3990,"personalAssignment":true,"active":true},{"id":14,"internalName":"Short e.s.t:aktik light ripstop schwarz","articleNumber":"62810","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 62810 · Rechnung R184546200 vom 11.05.2026","category":"arbeitskleidung","size":"58","variant":"schwarz","unit":"Stück","stock":1,"minStock":1,"location":"","lastPurchasePrice":4390,"personalAssignment":true,"active":true},{"id":15,"internalName":"Müllsack für Abfallkorb 87l 25mμ","articleNumber":"1578027","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 1578027 · 50 Säcke pro Rolle · Zugänge: R183960389 +13, R183959721 +7 = 20 total · Abgang: G25670899 alle 20 zurück · Aktuell: 0 auf Lager","category":"verbrauch","size":"","variant":"","unit":"Rolle","stock":0,"minStock":5,"location":"","lastPurchasePrice":579,"personalAssignment":false,"active":true},{"id":16,"internalName":"Bundhose e.s.iconic schwarz","articleNumber":"66601","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 66601 · Rechnung R181623552 (05.11.2025) +2 · Gutschrift G25064726 (12.11.2025) -2 · Aktuell: 0 auf Lager","category":"arbeitskleidung","size":"58","variant":"schwarz","unit":"Stück","stock":0,"minStock":1,"location":"","lastPurchasePrice":2999,"personalAssignment":true,"active":true},{"id":17,"internalName":"PU-Schnittschutzhandschuhe Comfort-Skin cut B","articleNumber":"7616409","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 7616409 · Rechnung R183959721 vom 30.03.2026","category":"handschuhe","size":"9","variant":"schwarz/blau-melange","unit":"Paar","stock":60,"minStock":10,"location":"","lastPurchasePrice":320,"personalAssignment":false,"active":true},{"id":18,"internalName":"PU-Schnittschutzhandschuhe Comfort-Skin cut B","articleNumber":"7616410","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 7616410 · Rechnung R183958607 vom 30.03.2026 (Teillieferung)","category":"handschuhe","size":"10","variant":"schwarz/blau-melange","unit":"Paar","stock":60,"minStock":10,"location":"","lastPurchasePrice":320,"personalAssignment":false,"active":true},{"id":19,"internalName":"PU-Schnittschutzhandschuhe Comfort-Skin cut B","articleNumber":"7616411","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 7616411 · Rechnung R183959721 vom 30.03.2026","category":"handschuhe","size":"11","variant":"schwarz/blau-melange","unit":"Paar","stock":60,"minStock":10,"location":"","lastPurchasePrice":320,"personalAssignment":false,"active":true},{"id":21,"internalName":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe","articleNumber":"B0BWK8Z1G9","ean":"","supplier":"Krähe WORKWEAR GmbH & Co. KG","notes":"ASIN: B0BWK8Z1G9 · Amazon-Bestellung 028-4386083-4910764 · Rechnung DE6000Z7QH9PTI · 18.05.2026 · Schuhgröße bitte nachtragen!","category":"sicherheitsschuhe","size":"","variant":"schwarz","unit":"Paar","stock":3,"minStock":1,"location":"","lastPurchasePrice":7559,"personalAssignment":true,"active":true},{"id":22,"internalName":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe","articleNumber":"B0BWK98KD3","ean":"","supplier":"Krähe WORKWEAR GmbH & Co. KG","notes":"ASIN: B0BWK98KD3 · Amazon-Bestellung 303-3960305-5314734 · Rechnung DE6000Z6QH9PTI · 18.05.2026 · Schuhgröße bitte nachtragen! (andere Größe als B0BWK8Z1G9)","category":"sicherheitsschuhe","size":"","variant":"schwarz","unit":"Paar","stock":1,"minStock":1,"location":"","lastPurchasePrice":7559,"personalAssignment":true,"active":true},{"id":20,"internalName":"e.s. T-Shirt cotton stretch V-Neck seeblau","articleNumber":"87490","ean":"","supplier":"Strauss Deutschland GmbH & Co. KG","notes":"Strauss Art.-Nr. 87490 · Rechnung R183958607 vom 30.03.2026 (Teillieferung)","category":"arbeitskleidung","size":"2XL","variant":"seeblau","unit":"Stück","stock":5,"minStock":1,"location":"","lastPurchasePrice":1200,"personalAssignment":true,"active":true}],"aliases":[{"id":30,"articleId":10,"supplierId":1,"supplierSku":"61501","supplierLabel":"Bundhose e.s.concrete light","matchSize":"23","matchVariant":"schwarz"},{"id":31,"articleId":11,"supplierId":1,"supplierSku":"61501","supplierLabel":"Bundhose e.s.concrete light","matchSize":"44","matchVariant":"schwarz"},{"id":32,"articleId":12,"supplierId":1,"supplierSku":"66550","supplierLabel":"Cargo-Short e.s.vintage","matchSize":"54","matchVariant":"schwarz"},{"id":33,"articleId":13,"supplierId":1,"supplierSku":"62810","supplierLabel":"Short e.s.t:aktik light ripstop","matchSize":"44","matchVariant":"schwarz"},{"id":34,"articleId":14,"supplierId":1,"supplierSku":"62810","supplierLabel":"Short e.s.t:aktik light ripstop","matchSize":"58","matchVariant":"schwarz"},{"id":35,"articleId":15,"supplierId":1,"supplierSku":"1578027","supplierLabel":"50x Müllsack für Abfallkorb, 87l, 25 mμ","matchSize":"","matchVariant":""},{"id":36,"articleId":16,"supplierId":1,"supplierSku":"66601","supplierLabel":"Bundhose e.s.iconic","matchSize":"58","matchVariant":"schwarz"},{"id":37,"articleId":17,"supplierId":1,"supplierSku":"7616409","supplierLabel":"PU-Schnittschutzhandschuhe Comfort-Skin cut B","matchSize":"9","matchVariant":"schwarz/blau-melange"},{"id":38,"articleId":18,"supplierId":1,"supplierSku":"7616410","supplierLabel":"PU-Schnittschutzhandschuhe Comfort-Skin cut B","matchSize":"10","matchVariant":"schwarz/blau-melange"},{"id":39,"articleId":19,"supplierId":1,"supplierSku":"7616411","supplierLabel":"PU-Schnittschutzhandschuhe Comfort-Skin cut B","matchSize":"11","matchVariant":"schwarz/blau-melange"},{"id":40,"articleId":20,"supplierId":1,"supplierSku":"87490","supplierLabel":"e.s. T-Shirt cotton stretch V-Neck","matchSize":"2XL","matchVariant":"seeblau"},{"id":41,"articleId":21,"supplierId":2,"supplierSku":"B0BWK8Z1G9","supplierLabel":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe","matchSize":"","matchVariant":"schwarz"},{"id":42,"articleId":22,"supplierId":2,"supplierSku":"B0BWK98KD3","supplierLabel":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe","matchSize":"","matchVariant":"schwarz"}],"employees":[],"imports":[{"id":52,"supplierId":1,"invoiceNumber":"R181623552","orderNumber":"A132570273","invoiceDate":"2025-11-05","deliveryDate":"2025-11-05","status":"confirmed","totalNet":5998,"totalVat":1235,"totalGross":7333,"notes":"Bestellung A132570273 vom 05.11.2025 · SEPA-Lastschrift 15.11.2025 · 2% Skonto -1,55 EUR · Später vollständig mit G25064726 gutgeschrieben"},{"id":53,"supplierId":1,"invoiceNumber":"G25064726","orderNumber":"A132753128","invoiceDate":"2025-11-12","deliveryDate":"2025-11-12","status":"confirmed","totalNet":-6498,"totalVat":-1235,"totalGross":-7733,"notes":"GUTSCHRIFT zu Rechnung R181623552 · Bundhose e.s.iconic Gr.58 ×2 zurück + Portoerstattung 5,00 EUR · Erstattung -77,33 EUR brutto"},{"id":54,"supplierId":1,"invoiceNumber":"R183958607","orderNumber":"A135957064","invoiceDate":"2026-03-30","deliveryDate":"2026-03-30","status":"confirmed","totalNet":25200,"totalVat":4788,"totalGross":29988,"notes":"TEILLIEFERUNG · Bestellung A135957064 vom 28.03.2026 · SEPA-Lastschrift 09.04.2026 · 2% Skonto -6,00 EUR"},{"id":55,"supplierId":1,"invoiceNumber":"R183959721","orderNumber":"A135957064","invoiceDate":"2026-03-30","deliveryDate":"2026-03-30","status":"confirmed","totalNet":42453,"totalVat":8066,"totalGross":50519,"notes":"TEILLIEFERUNG · Bestellung A135957064 vom 28.03.2026 · SEPA-Lastschrift 09.04.2026 · 2% Skonto -10,10 EUR · Müllsäcke später alle zurück per G25670899"},{"id":56,"supplierId":1,"invoiceNumber":"R183960389","orderNumber":"A135957064","invoiceDate":"2026-03-30","deliveryDate":"2026-03-30","status":"confirmed","totalNet":7527,"totalVat":1430,"totalGross":8957,"notes":"TEILLIEFERUNG · Bestellung A135957064 vom 28.03.2026 · SEPA-Lastschrift 09.04.2026 · 2% Skonto -1,79 EUR · Müllsäcke später alle zurück per G25670899"},{"id":51,"supplierId":1,"invoiceNumber":"G25670899","orderNumber":"A136139014","invoiceDate":"2026-04-08","deliveryDate":"2026-04-08","status":"confirmed","totalNet":-11580,"totalVat":-2200,"totalGross":-13780,"notes":"GUTSCHRIFT zu Rechnung R183960389 · Rückgabe aller 20 Rollen Müllsäcke (Art. 1578027) aus R183960389 +13 und R183959721 +7 · Erstattung -137,80 EUR brutto"},{"id":58,"supplierId":2,"invoiceNumber":"DE6000Z6QH9PTI","orderNumber":"303-3960305-5314734","invoiceDate":"2026-05-18","deliveryDate":"2026-05-18","status":"confirmed","totalNet":22677,"totalVat":4308,"totalGross":26985,"notes":"Amazon-Kauf · Bestelldatum 15.05.2026 · Zahlungsref. 54LZZ5OI7OM6QE08 · Bereits bezahlt · 3 Paar Sicherheitsschuhe in 2 Größen"},{"id":57,"supplierId":2,"invoiceNumber":"DE6000Z7QH9PTI","orderNumber":"028-4386083-4910764","invoiceDate":"2026-05-18","deliveryDate":"2026-05-18","status":"confirmed","totalNet":7559,"totalVat":1436,"totalGross":8995,"notes":"Amazon-Kauf · Bestelldatum 16.05.2026 · Zahlungsref. 1THFXL8AFTUIRW7D · Bereits bezahlt"},{"id":50,"supplierId":1,"invoiceNumber":"R184546200","orderNumber":"A136831928","invoiceDate":"2026-05-11","deliveryDate":"2026-05-11","status":"confirmed","totalNet":53800,"totalVat":10222,"totalGross":64022,"notes":"Bestellung A136831928 vom 11.05.2026 · SEPA-Lastschrift 21.05.2026 · 2% Skonto -12,80 EUR"}],"importLines":[{"id":76,"importId":58,"articleId":21,"supplierSku":"B0BWK8Z1G9","supplierLabel":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe (ASIN B0BWK8Z1G9)","matchSize":"","matchVariant":"schwarz","quantity":2,"unitPriceNet":7559,"totalNet":15118,"status":"matched"},{"id":77,"importId":58,"articleId":22,"supplierSku":"B0BWK98KD3","supplierLabel":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe (ASIN B0BWK98KD3)","matchSize":"","matchVariant":"schwarz","quantity":1,"unitPriceNet":7559,"totalNet":7559,"status":"matched"},{"id":75,"importId":57,"articleId":21,"supplierSku":"B0BWK8Z1G9","supplierLabel":"KRÄHE Black Crow S3 ESD SRC Sicherheitshalbschuhe","matchSize":"","matchVariant":"schwarz","quantity":1,"unitPriceNet":7559,"totalNet":7559,"status":"matched"},{"id":60,"importId":52,"articleId":16,"supplierSku":"66601","supplierLabel":"Bundhose e.s.iconic schwarz Gr.58","matchSize":"58","matchVariant":"schwarz","quantity":2,"unitPriceNet":2999,"totalNet":5998,"status":"matched"},{"id":61,"importId":53,"articleId":16,"supplierSku":"66601","supplierLabel":"Bundhose e.s.iconic schwarz Gr.58 (RÜCKGABE)","matchSize":"58","matchVariant":"schwarz","quantity":2,"unitPriceNet":-2999,"totalNet":-5998,"status":"matched"},{"id":62,"importId":54,"articleId":20,"supplierSku":"87490","supplierLabel":"e.s. T-Shirt cotton stretch V-Neck seeblau 2XL","matchSize":"2XL","matchVariant":"seeblau","quantity":5,"unitPriceNet":1200,"totalNet":6000,"status":"matched"},{"id":63,"importId":54,"articleId":18,"supplierSku":"7616410","supplierLabel":"PU-Schnittschutzhandschuhe Comfort-Skin cut B schwarz/blau-melange Gr.10","matchSize":"10","matchVariant":"schwarz/blau-melange","quantity":60,"unitPriceNet":320,"totalNet":19200,"status":"matched"},{"id":64,"importId":55,"articleId":15,"supplierSku":"1578027","supplierLabel":"50x Müllsack für Abfallkorb, 87l, 25 mμ Rolle/50 Säcke","matchSize":"","matchVariant":"","quantity":7,"unitPriceNet":579,"totalNet":4053,"status":"matched"},{"id":65,"importId":55,"articleId":19,"supplierSku":"7616411","supplierLabel":"PU-Schnittschutzhandschuhe Comfort-Skin cut B schwarz/blau-melange Gr.11","matchSize":"11","matchVariant":"schwarz/blau-melange","quantity":60,"unitPriceNet":320,"totalNet":19200,"status":"matched"},{"id":66,"importId":55,"articleId":17,"supplierSku":"7616409","supplierLabel":"PU-Schnittschutzhandschuhe Comfort-Skin cut B schwarz/blau-melange Gr.9","matchSize":"9","matchVariant":"schwarz/blau-melange","quantity":60,"unitPriceNet":320,"totalNet":19200,"status":"matched"},{"id":67,"importId":56,"articleId":15,"supplierSku":"1578027","supplierLabel":"50x Müllsack für Abfallkorb, 87l, 25 mμ Rolle/50 Säcke","matchSize":"","matchVariant":"","quantity":13,"unitPriceNet":579,"totalNet":7527,"status":"matched"},{"id":68,"importId":51,"articleId":15,"supplierSku":"1578027","supplierLabel":"Müllsack 87l 25mμ Rolle (RÜCKGABE 1/2)","matchSize":"","matchVariant":"","quantity":10,"unitPriceNet":-579,"totalNet":-5790,"status":"matched"},{"id":69,"importId":51,"articleId":15,"supplierSku":"1578027","supplierLabel":"Müllsack 87l 25mμ Rolle (RÜCKGABE 2/2)","matchSize":"","matchVariant":"","quantity":10,"unitPriceNet":-579,"totalNet":-5790,"status":"matched"},{"id":70,"importId":50,"articleId":10,"supplierSku":"61501","supplierLabel":"Bundhose e.s.concrete light schwarz Gr.23","matchSize":"23","matchVariant":"schwarz","quantity":3,"unitPriceNet":5990,"totalNet":17970,"status":"matched"},{"id":71,"importId":50,"articleId":11,"supplierSku":"61501","supplierLabel":"Bundhose e.s.concrete light schwarz Gr.44","matchSize":"44","matchVariant":"schwarz","quantity":3,"unitPriceNet":5990,"totalNet":17970,"status":"matched"},{"id":72,"importId":50,"articleId":12,"supplierSku":"66550","supplierLabel":"Cargo-Short e.s.vintage schwarz Gr.54","matchSize":"54","matchVariant":"schwarz","quantity":1,"unitPriceNet":5490,"totalNet":5490,"status":"matched"},{"id":73,"importId":50,"articleId":13,"supplierSku":"62810","supplierLabel":"Short e.s.t:aktik light ripstop schwarz Gr.44","matchSize":"44","matchVariant":"schwarz","quantity":2,"unitPriceNet":3990,"totalNet":7980,"status":"matched"},{"id":74,"importId":50,"articleId":14,"supplierSku":"62810","supplierLabel":"Short e.s.t:aktik light ripstop schwarz Gr.58","matchSize":"58","matchVariant":"schwarz","quantity":1,"unitPriceNet":4390,"totalNet":4390,"status":"matched"}],"movements":[{"id":100,"articleId":16,"type":"eingang","quantity":2,"employeeId":null,"importLineId":60,"unitPrice":2999,"note":"Wareneingang · Strauss R181623552 · 05.11.2025","occurredAt":"2025-11-05"},{"id":101,"articleId":16,"type":"korrektur","quantity":-2,"employeeId":null,"importLineId":61,"unitPrice":2999,"note":"Gutschrift G25064726 · Rückgabe 2×Bundhose iconic Gr.58 · 12.11.2025","occurredAt":"2025-11-12"},{"id":102,"articleId":20,"type":"eingang","quantity":5,"employeeId":null,"importLineId":62,"unitPrice":1200,"note":"Wareneingang · Strauss R183958607 (Teillieferung) · 30.03.2026","occurredAt":"2026-03-30"},{"id":103,"articleId":18,"type":"eingang","quantity":60,"employeeId":null,"importLineId":63,"unitPrice":320,"note":"Wareneingang · Strauss R183958607 (Teillieferung) · 30.03.2026","occurredAt":"2026-03-30"},{"id":104,"articleId":15,"type":"eingang","quantity":7,"employeeId":null,"importLineId":64,"unitPrice":579,"note":"Wareneingang · Strauss R183959721 (Teillieferung) · 30.03.2026","occurredAt":"2026-03-30"},{"id":105,"articleId":19,"type":"eingang","quantity":60,"employeeId":null,"importLineId":65,"unitPrice":320,"note":"Wareneingang · Strauss R183959721 (Teillieferung) · 30.03.2026","occurredAt":"2026-03-30"},{"id":106,"articleId":17,"type":"eingang","quantity":60,"employeeId":null,"importLineId":66,"unitPrice":320,"note":"Wareneingang · Strauss R183959721 (Teillieferung) · 30.03.2026","occurredAt":"2026-03-30"},{"id":107,"articleId":15,"type":"eingang","quantity":13,"employeeId":null,"importLineId":67,"unitPrice":579,"note":"Wareneingang · Strauss R183960389 (Teillieferung) · 30.03.2026","occurredAt":"2026-03-30"},{"id":108,"articleId":15,"type":"korrektur","quantity":-20,"employeeId":null,"importLineId":68,"unitPrice":579,"note":"Gutschrift G25670899 · Rückgabe alle 20 Rollen Müllsäcke · 08.04.2026","occurredAt":"2026-04-08"},{"id":109,"articleId":10,"type":"eingang","quantity":3,"employeeId":null,"importLineId":70,"unitPrice":5990,"note":"Wareneingang · Strauss R184546200 · 11.05.2026","occurredAt":"2026-05-11"},{"id":110,"articleId":11,"type":"eingang","quantity":3,"employeeId":null,"importLineId":71,"unitPrice":5990,"note":"Wareneingang · Strauss R184546200 · 11.05.2026","occurredAt":"2026-05-11"},{"id":111,"articleId":12,"type":"eingang","quantity":1,"employeeId":null,"importLineId":72,"unitPrice":5490,"note":"Wareneingang · Strauss R184546200 · 11.05.2026","occurredAt":"2026-05-11"},{"id":112,"articleId":13,"type":"eingang","quantity":2,"employeeId":null,"importLineId":73,"unitPrice":3990,"note":"Wareneingang · Strauss R184546200 · 11.05.2026","occurredAt":"2026-05-11"},{"id":113,"articleId":14,"type":"eingang","quantity":1,"employeeId":null,"importLineId":74,"unitPrice":4390,"note":"Wareneingang · Strauss R184546200 · 11.05.2026","occurredAt":"2026-05-11"},{"id":114,"articleId":21,"type":"eingang","quantity":1,"employeeId":null,"importLineId":75,"unitPrice":7559,"note":"Wareneingang · Amazon/Krähe DE6000Z7QH9PTI · 18.05.2026 · Größe bitte nachtragen","occurredAt":"2026-05-18"},{"id":115,"articleId":21,"type":"eingang","quantity":2,"employeeId":null,"importLineId":76,"unitPrice":7559,"note":"Wareneingang · Amazon/Krähe DE6000Z6QH9PTI · 18.05.2026 · Größe bitte nachtragen","occurredAt":"2026-05-18"},{"id":116,"articleId":22,"type":"eingang","quantity":1,"employeeId":null,"importLineId":77,"unitPrice":7559,"note":"Wareneingang · Amazon/Krähe DE6000Z6QH9PTI · 18.05.2026 · Größe bitte nachtragen","occurredAt":"2026-05-18"}],"assignments":[],"auditLog":[]}`;
+
+function freshISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function computeNextDataId(data) {
+  const ids = [...STATE_ARRAY_KEYS, 'auditLog']
+    .flatMap(key => Array.isArray(data[key]) ? data[key].map(row => row?.id || 0) : []);
+  return Math.max(0, ...ids) + 1;
+}
+
+function invoiceNumberValue(imp) {
+  return imp?.invoiceNo || imp?.invoiceNumber || null;
+}
+
+function hasStraussProductionData(data) {
+  return !!(
+    data &&
+    Array.isArray(data.suppliers) &&
+    data.suppliers.some(supplier => /strauss/i.test(supplier?.name || '')) &&
+    Array.isArray(data.articles) &&
+    data.articles.some(article => article?.id === 10 || /bundhose e\\.s\\.concrete light/i.test(article?.internalName || ''))
+  );
+}
+
+function hasBandyshirtSeedData(data) {
+  return !!(
+    data &&
+    Array.isArray(data.imports) &&
+    data.imports.some(imp => invoiceNumberValue(imp) === 'BSi042600160397')
+  );
+}
+
+function isLegacySparseBootstrapState(data) {
+  return !!(
+    data &&
+    !hasStraussProductionData(data) &&
+    hasBandyshirtSeedData(data) &&
+    Array.isArray(data.articles) &&
+    data.articles.length <= 4
+  );
+}
+
+function isOperationallyEmptyState(data) {
+  return !!(
+    data &&
+    Array.isArray(data.suppliers) && data.suppliers.length === 0 &&
+    Array.isArray(data.articles) && data.articles.length === 0 &&
+    Array.isArray(data.imports) && data.imports.length === 0
+  );
+}
 
 function defaultImportBehavior() {
   return {
@@ -427,15 +479,181 @@ function migrateData(data) {
     }
     return article;
   });
+  const posByImportId = {};
+  normalized.imports = normalized.imports.map(imp => {
+    if (!imp || typeof imp !== 'object') return imp;
+    const invoiceNo = imp.invoiceNo || imp.invoiceNumber || null;
+    return {
+      ...imp,
+      invoiceNo,
+      invoiceNumber: imp.invoiceNumber || invoiceNo,
+      supplierName: imp.supplierName || (normalized.suppliers.find(supplier => supplier.id === imp.supplierId)?.name || null),
+      rawText: imp.rawText || '',
+      createdAt: imp.createdAt || imp.invoiceDate || freshISODate(),
+      status: imp.status || 'parsed'
+    };
+  });
+  normalized.importLines = normalized.importLines.map(line => {
+    if (!line || typeof line !== 'object') return line;
+    const currentPos = Number.isInteger(line.pos) ? line.pos : ((posByImportId[line.importId] || 0) + 1);
+    posByImportId[line.importId] = currentPos;
+    const matchedArticleId = line.matchedArticleId || line.articleId || null;
+    const derivedStatus = line.matchStatus || (line.status === 'matched' ? (matchedArticleId ? 'manual' : 'needs_review') : line.status || 'needs_review');
+    return {
+      ...line,
+      pos: currentPos,
+      matchedArticleId,
+      rawLabel: line.rawLabel || line.supplierLabel || '',
+      rawSize: line.rawSize ?? line.matchSize ?? null,
+      rawVariant: line.rawVariant ?? line.matchVariant ?? null,
+      unitPrice: line.unitPrice ?? line.unitPriceNet ?? null,
+      totalPrice: line.totalPrice ?? line.totalNet ?? null,
+      matchStatus: derivedStatus,
+      matchScore: line.matchScore ?? (matchedArticleId ? 100 : 0),
+      note: line.note || (line.status === 'matched' ? 'Aus Bestandsdaten übernommen' : null)
+    };
+  });
   if (!Array.isArray(normalized.meta.customCategories)) normalized.meta.customCategories = [];
   normalized.meta.customUnits = normalizeCustomUnits(normalized.meta.customUnits, normalized.articles);
   if (!Number.isInteger(normalized.meta.nextId) || normalized.meta.nextId < 1) {
-    const ids = [...STATE_ARRAY_KEYS, 'auditLog']
-      .flatMap(k => Array.isArray(normalized[k]) ? normalized[k].map(x => x.id || 0) : []);
-    normalized.meta.nextId = Math.max(0, ...ids) + 1;
+    normalized.meta.nextId = computeNextDataId(normalized);
   }
-  normalized.meta.version = 3;
+  normalized.meta.version = 4;
   return orderState(normalized);
+}
+
+function applyCompanySeedData(data) {
+  const seeded = migrateData(JSON.parse(JSON.stringify(data)));
+  if (hasBandyshirtSeedData(seeded)) return seeded;
+
+  const supplierId = 300;
+  const articleIds = [301, 302, 303];
+  const aliasIds = [304, 305, 306];
+  const importId = 307;
+  const importLineIds = [308, 309, 310];
+
+  seeded.suppliers.push({
+    id: supplierId,
+    name: 'Bandyshirt GmbH',
+    shortName: 'Bandyshirt',
+    address: 'Rüppurerstr. 1, 76137 Karlsruhe',
+    email: null,
+    phone: null,
+    website: 'bandyshirt.de',
+    taxId: 'DE815700651',
+    vatId: 'DE815700651',
+    notes: 'Offener Textil-Import BSi042600160397 vom 30.04.2026'
+  });
+
+  [
+    { id: articleIds[0], size: 'M', qty: 7, total: 18759 },
+    { id: articleIds[1], size: 'L', qty: 7, total: 18759 },
+    { id: articleIds[2], size: 'XXL', qty: 5, total: 13399 }
+  ].forEach(item => {
+    seeded.articles.push({
+      id: item.id,
+      internalName: 'T-Shirt',
+      articleNumber: '#E190',
+      ean: null,
+      supplier: 'Bandyshirt GmbH',
+      notes: 'Bandyshirt #E190 · Rechnung BSi042600160397 vom 30.04.2026 · Noch nicht eingebucht',
+      category: 'arbeitskleidung',
+      size: item.size,
+      variant: 'Schwarz',
+      unit: 'Stück',
+      stock: 0,
+      minStock: 1,
+      location: '',
+      lastPurchasePrice: 3189,
+      personalAssignment: true,
+      active: true
+    });
+  });
+
+  articleIds.forEach((articleId, index) => {
+    const size = ['M', 'L', 'XXL'][index];
+    seeded.aliases.push({
+      id: aliasIds[index],
+      articleId,
+      supplierId,
+      supplierSku: '#E190',
+      supplierLabel: '#E190 T-Shirt',
+      matchSize: size,
+      matchVariant: 'Schwarz'
+    });
+  });
+
+  seeded.imports.push({
+    id: importId,
+    supplierId,
+    supplierName: 'Bandyshirt GmbH',
+    invoiceNo: 'BSi042600160397',
+    invoiceNumber: 'BSi042600160397',
+    orderNumber: 'BS042600167275',
+    invoiceDate: '2026-04-30',
+    deliveryDate: '2026-04-30',
+    rawText: '',
+    status: 'parsed',
+    totalNet: 46321,
+    totalVat: 8801,
+    totalGross: 55122,
+    notes: 'Offener Import aus PDF-Rechnung BSi042600160397',
+    createdAt: '2026-04-30'
+  });
+
+  [
+    { id: importLineIds[0], pos: 1, articleId: articleIds[0], size: 'M', qty: 7, total: 18759 },
+    { id: importLineIds[1], pos: 2, articleId: articleIds[1], size: 'L', qty: 7, total: 18759 },
+    { id: importLineIds[2], pos: 3, articleId: articleIds[2], size: 'XXL', qty: 5, total: 13399 }
+  ].forEach(line => {
+    seeded.importLines.push({
+      id: line.id,
+      importId,
+      pos: line.pos,
+      articleId: line.articleId,
+      matchedArticleId: line.articleId,
+      supplierSku: '#E190',
+      supplierLabel: '#E190 T-Shirt',
+      rawLabel: '#E190 T-Shirt',
+      matchSize: line.size,
+      rawSize: line.size,
+      matchVariant: 'Schwarz',
+      rawVariant: 'Schwarz',
+      quantity: line.qty,
+      unitPriceNet: 3189,
+      unitPrice: 3189,
+      totalNet: line.total,
+      totalPrice: line.total,
+      status: 'matched',
+      matchStatus: 'manual',
+      matchScore: 100,
+      note: 'Aus Bandyshirt-Stammdaten vorbereitet'
+    });
+  });
+
+  seeded.meta.nextId = computeNextDataId(seeded);
+  return migrateData(seeded);
+}
+
+function createBundledProductionState() {
+  return applyCompanySeedData(JSON.parse(BUNDLED_PRODUCTION_JSON));
+}
+
+function ensureBundledProductionData() {
+  if (hasStraussProductionData(state)) {
+    const upgraded = applyCompanySeedData(state);
+    if (!hasBandyshirtSeedData(state) && hasBandyshirtSeedData(upgraded)) {
+      state = upgraded;
+      saveData();
+      console.log('[bootstrap] Bandyshirt-Stammdaten zur Produktivbasis ergänzt.');
+    }
+    return;
+  }
+  if (isOperationallyEmptyState(state) || isLegacySparseBootstrapState(state)) {
+    state = createBundledProductionState();
+    saveData();
+    console.log('[bootstrap] Vollständige Produktivdaten geladen.');
+  }
 }
 
 function appSettings() {
@@ -3544,6 +3762,21 @@ function getDataHealthFindings() {
   return findings;
 }
 
+async function loadBundledProductionData() {
+  if (!requirePermission('admin', 'Nur Admins dürfen Basisdaten laden.')) return;
+  if (!await confirmDialog('Lokale Daten durch den vollständigen Produktiv-Basisstand ersetzen?')) return;
+  state = createBundledProductionState();
+  initOnce();
+  audit('LOAD_BUNDLED_PRODUCTION_DATA', 'system', null, null, {
+    suppliers: state.suppliers.length,
+    articles: state.articles.length,
+    imports: state.imports.length
+  });
+  persist();
+  handleRoute();
+  toast('Vollständige Produktivdaten geladen.', 'success');
+}
+
 /* ---------- Daten verwalten ---------- */
 function renderDataView() {
   const v = $('#view');
@@ -3581,6 +3814,13 @@ function renderDataView() {
           `).join('')}
         </tbody>
       </table>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2>Produktiv-Basisdaten</h2>
+      <p class="lead">Lädt den vollständigen Strauss-/Krähe-Bestand plus Bandyshirt-Rechnung in den aktuellen Browserstand. Sinnvoll, wenn bisher nur der kleine Startzustand sichtbar ist.</p>
+      <div class="actions">
+        <button onclick="loadBundledProductionData()">Vollständige Basisdaten laden</button>
+      </div>
     </div>
     <div class="card" style="margin-top:14px;">
       <h2>Backup &amp; Import</h2>
@@ -3623,6 +3863,8 @@ async function importData(input) {
         return;
       }
       state = migrateData(obj);
+      if (hasStraussProductionData(state)) state = applyCompanySeedData(state);
+      initOnce();
       audit('DATA_IMPORT', 'system', null, null, { movements: state.movements.length, articles: state.articles.length });
       persist(); handleRoute();
       toast('Daten importiert und geprüft.', 'success');
@@ -3795,6 +4037,7 @@ function initOnce() {
 /* =========================================================================
    INIT
    ========================================================================= */
+ensureBundledProductionData();
 initOnce();
 handleRoute();
 renderMenu();
