@@ -120,6 +120,36 @@
   .kpi-val.green  { color: #16a34a; }
   .kpi-hint  { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 
+  /* ── Reporting ── */
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .card-head h2 { margin-bottom: 4px; }
+  .report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+  .report-metric {
+    border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;
+    background: linear-gradient(180deg, #fff, #f8fafc);
+  }
+  .report-metric .label { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+  .report-metric .value { color: #0f172a; font-size: 22px; font-weight: 750; margin-top: 3px; }
+  .report-metric .hint { color: #94a3b8; font-size: 11px; margin-top: 3px; }
+  .mini-panel {
+    border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;
+    background: #f8fafc; min-width: 280px;
+  }
+  .mini-panel h3 {
+    font-size: 12px; color: #334155; text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 10px;
+  }
+  .bar-row { display: grid; grid-template-columns: 92px 1fr 84px; gap: 10px; align-items: center; margin: 8px 0; font-size: 12px; }
+  .bar-label { color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-value { text-align: right; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .bar-track { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #14b8a6); border-radius: 999px; min-width: 2px; }
+  .muted { color: #94a3b8; }
+  .subtle { color: #64748b; font-size: 12px; line-height: 1.45; }
+
   /* Legacy stat (kept for compatibility) */
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
   .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
@@ -237,7 +267,14 @@
     .container { padding: 16px; }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .row { flex-direction: column; }
+    .row > .card { min-width: 0 !important; width: 100%; }
+    .card { max-width: 100%; overflow-x: auto; }
     .actions { flex-wrap: wrap; }
+    .card-head { align-items: stretch; }
+    .card-head .toolbar { width: 100%; }
+    .card-head select { max-width: none !important; }
+    .mini-panel { min-width: 0 !important; width: 100%; }
+    .bar-row { grid-template-columns: 82px minmax(64px, 1fr) 78px; gap: 8px; }
   }
 </style>
 </head>
@@ -458,6 +495,7 @@ function migrateData(data) {
   const defSettings = defaultData().meta.settings;
   if (!normalized.meta.settings || typeof normalized.meta.settings !== 'object') normalized.meta.settings = mergeSettings(defSettings, {});
   else normalized.meta.settings = mergeSettings(defSettings, normalized.meta.settings);
+  normalized.meta.costReportMonth = normalized.meta.costReportMonth || null;
   normalized.suppliers = normalized.suppliers.map(supplier => {
     if (!supplier || typeof supplier !== 'object') return supplier;
     const taxId = supplier.taxId || supplier.vatId || null;
@@ -478,6 +516,21 @@ function migrateData(data) {
       return { ...article, stock: article.currentStock };
     }
     return article;
+  });
+  normalized.employees = normalized.employees.map(employee => {
+    if (!employee || typeof employee !== 'object') return employee;
+    return {
+      ...employee,
+      personnelNo: employee.personnelNo || null,
+      department: employee.department || null,
+      costCenter: employee.costCenter || null,
+      roleTitle: employee.roleTitle || null,
+      location: employee.location || null,
+      startDate: employee.startDate || null,
+      clothingSize: employee.clothingSize || null,
+      shoeSize: employee.shoeSize || null,
+      notes: employee.notes || null
+    };
   });
   const posByImportId = {};
   normalized.imports = normalized.imports.map(imp => {
@@ -1577,6 +1630,263 @@ function downloadText(filename, text, type='text/plain') {
   URL.revokeObjectURL(url);
 }
 
+function monthKey(value) {
+  if (!value) return '';
+  const direct = String(value).match(/^(\d{4})-(\d{2})/);
+  if (direct) return `${direct[1]}-${direct[2]}`;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function currentMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function shiftMonthKey(key, offset) {
+  const [year, month] = (key || currentMonthKey()).split('-').map(Number);
+  const d = new Date(year || new Date().getFullYear(), (month || 1) - 1 + offset, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function fmtMonth(key) {
+  if (!key) return '—';
+  const [year, month] = key.split('-').map(Number);
+  if (!year || !month) return key;
+  return new Date(year, month - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+}
+
+function employeeDisplayName(emp) {
+  return emp ? `${emp.lastName || ''}, ${emp.firstName || ''}`.replace(/^, /, '').trim() : 'Unbekannt';
+}
+
+function employeeCostCenter(emp) {
+  return emp?.costCenter || emp?.department || 'Ohne Kostenstelle';
+}
+
+function articleDisplayName(article) {
+  if (!article) return 'Unbekannter Artikel';
+  return `${article.internalName || 'Artikel'}${article.size ? ' · ' + article.size : ''}${article.variant ? ' · ' + article.variant : ''}`;
+}
+
+function movementUnitPrice(movement) {
+  const article = state.articles.find(article => article.id === movement.articleId);
+  const price = movement.unitPrice ?? article?.lastPurchasePrice ?? null;
+  const cents = Number(price);
+  return Number.isFinite(cents) ? cents : null;
+}
+
+function movementCost(movement) {
+  const price = movementUnitPrice(movement);
+  const quantity = Math.abs(Number(movement.quantity) || 0);
+  return price == null ? 0 : quantity * price;
+}
+
+function costRecords(employeeId=null) {
+  return state.movements
+    .filter(movement => movement.type === 'ausgabe' && movement.employeeId)
+    .filter(movement => employeeId == null || movement.employeeId === employeeId)
+    .map(movement => {
+      const employee = state.employees.find(emp => emp.id === movement.employeeId) || null;
+      const article = state.articles.find(art => art.id === movement.articleId) || null;
+      const price = movementUnitPrice(movement);
+      const quantity = Math.abs(Number(movement.quantity) || 0);
+      const category = catInfo(article?.category);
+      return {
+        movement,
+        employee,
+        article,
+        date: movement.occurredAt || '',
+        month: monthKey(movement.occurredAt),
+        quantity,
+        unitPrice: price,
+        cost: price == null ? 0 : quantity * price,
+        categoryId: article?.category || '',
+        categoryLabel: category.label,
+        costCenter: employeeCostCenter(employee),
+        department: employee?.department || 'Ohne Abteilung'
+      };
+    });
+}
+
+function summarizeCostRows(rows) {
+  return rows.reduce((sum, row) => {
+    sum.cost += row.cost;
+    sum.quantity += row.quantity;
+    sum.count += 1;
+    if (row.unitPrice == null) sum.missingPriceCount += 1;
+    return sum;
+  }, { cost: 0, quantity: 0, count: 0, missingPriceCount: 0 });
+}
+
+function aggregateCostRows(rows, keyFn) {
+  const map = new Map();
+  rows.forEach(row => {
+    const key = keyFn(row) || 'Ohne Zuordnung';
+    const current = map.get(key) || { label: key, cost: 0, quantity: 0, count: 0 };
+    current.cost += row.cost;
+    current.quantity += row.quantity;
+    current.count += 1;
+    map.set(key, current);
+  });
+  return Array.from(map.values()).sort((a,b) => b.cost - a.cost || b.quantity - a.quantity || a.label.localeCompare(b.label));
+}
+
+function availableCostMonths() {
+  const months = new Set(costRecords().map(row => row.month).filter(Boolean));
+  months.add(currentMonthKey());
+  return Array.from(months).sort().reverse();
+}
+
+function selectedCostMonth() {
+  const months = availableCostMonths();
+  const selected = state.meta.costReportMonth;
+  return months.includes(selected) ? selected : (months[0] || currentMonthKey());
+}
+
+function buildEmployeeCostReport(month=selectedCostMonth()) {
+  const selectedMonth = month || currentMonthKey();
+  const year = selectedMonth.slice(0, 4);
+  const records = costRecords();
+  const monthRows = records.filter(row => row.month === selectedMonth);
+  const ytdRows = records.filter(row => String(row.date || '').startsWith(year + '-'));
+  const activeEmployees = state.employees.filter(emp => emp.active !== false);
+  const byEmployeeMap = new Map();
+
+  activeEmployees.forEach(employee => {
+    byEmployeeMap.set(employee.id, {
+      employee,
+      monthCost: 0,
+      monthQty: 0,
+      monthCount: 0,
+      ytdCost: 0,
+      ytdQty: 0,
+      ytdCount: 0,
+      totalCost: 0,
+      totalQty: 0,
+      totalCount: 0,
+      missingPriceCount: 0,
+      categoryMap: new Map()
+    });
+  });
+
+  const ensureEmployeeRow = (employee) => {
+    if (!employee) return null;
+    if (!byEmployeeMap.has(employee.id)) {
+      byEmployeeMap.set(employee.id, {
+        employee,
+        monthCost: 0,
+        monthQty: 0,
+        monthCount: 0,
+        ytdCost: 0,
+        ytdQty: 0,
+        ytdCount: 0,
+        totalCost: 0,
+        totalQty: 0,
+        totalCount: 0,
+        missingPriceCount: 0,
+        categoryMap: new Map()
+      });
+    }
+    return byEmployeeMap.get(employee.id);
+  };
+
+  records.forEach(row => {
+    const employeeRow = ensureEmployeeRow(row.employee);
+    if (!employeeRow) return;
+    employeeRow.totalCost += row.cost;
+    employeeRow.totalQty += row.quantity;
+    employeeRow.totalCount += 1;
+    if (row.unitPrice == null) employeeRow.missingPriceCount += 1;
+    if (String(row.date || '').startsWith(year + '-')) {
+      employeeRow.ytdCost += row.cost;
+      employeeRow.ytdQty += row.quantity;
+      employeeRow.ytdCount += 1;
+    }
+    if (row.month === selectedMonth) {
+      employeeRow.monthCost += row.cost;
+      employeeRow.monthQty += row.quantity;
+      employeeRow.monthCount += 1;
+      const category = employeeRow.categoryMap.get(row.categoryLabel) || { label: row.categoryLabel, cost: 0, quantity: 0, count: 0 };
+      category.cost += row.cost;
+      category.quantity += row.quantity;
+      category.count += 1;
+      employeeRow.categoryMap.set(row.categoryLabel, category);
+    }
+  });
+
+  const byEmployee = Array.from(byEmployeeMap.values()).map(row => {
+    const categories = Array.from(row.categoryMap.values()).sort((a,b) => b.cost - a.cost || b.quantity - a.quantity);
+    return { ...row, topCategory: categories[0] || null };
+  }).sort((a,b) => b.monthCost - a.monthCost || b.ytdCost - a.ytdCost || employeeDisplayName(a.employee).localeCompare(employeeDisplayName(b.employee)));
+
+  const monthSummary = summarizeCostRows(monthRows);
+  const ytdSummary = summarizeCostRows(ytdRows);
+  const monthlyTotals = Array.from({ length: 12 }, (_, index) => {
+    const key = shiftMonthKey(selectedMonth, index - 11);
+    const rows = records.filter(row => row.month === key);
+    return { month: key, ...summarizeCostRows(rows) };
+  });
+
+  return {
+    month: selectedMonth,
+    year,
+    monthRows,
+    ytdRows,
+    monthTotal: monthSummary.cost,
+    monthQty: monthSummary.quantity,
+    monthCount: monthSummary.count,
+    missingPriceCount: monthSummary.missingPriceCount,
+    ytdTotal: ytdSummary.cost,
+    ytdQty: ytdSummary.quantity,
+    ytdCount: ytdSummary.count,
+    activeEmployeeCount: activeEmployees.length,
+    avgPerActive: activeEmployees.length ? Math.round(monthSummary.cost / activeEmployees.length) : 0,
+    byEmployee,
+    employeesWithMonthCost: byEmployee.filter(row => row.monthCost > 0 || row.monthCount > 0),
+    topEmployee: byEmployee.find(row => row.monthCost > 0 || row.monthCount > 0) || null,
+    categoryTotals: aggregateCostRows(monthRows, row => row.categoryLabel),
+    costCenterTotals: aggregateCostRows(monthRows, row => row.costCenter),
+    departmentTotals: aggregateCostRows(monthRows, row => row.department),
+    monthlyTotals
+  };
+}
+
+function setCostReportMonth(month) {
+  state.meta.costReportMonth = month || currentMonthKey();
+  persist();
+  handleRoute();
+}
+
+function exportEmployeeCostCsv(month=selectedCostMonth()) {
+  const report = buildEmployeeCostReport(month);
+  const rows = [
+    ['Monat', 'Mitarbeiter', 'Personalnummer', 'Abteilung', 'Kostenstelle', 'Funktion', 'Standort', 'Menge', 'Buchungen', 'Kosten Monat netto', 'Kosten Jahr netto', 'Top Kategorie']
+  ];
+  report.byEmployee
+    .filter(row => row.monthCost > 0 || row.ytdCost > 0 || row.monthCount > 0)
+    .forEach(row => {
+      rows.push([
+        fmtMonth(report.month),
+        employeeDisplayName(row.employee),
+        row.employee?.personnelNo || '',
+        row.employee?.department || '',
+        employeeCostCenter(row.employee),
+        row.employee?.roleTitle || '',
+        row.employee?.location || '',
+        row.monthQty,
+        row.monthCount,
+        (row.monthCost / 100).toFixed(2).replace('.', ','),
+        (row.ytdCost / 100).toFixed(2).replace('.', ','),
+        row.topCategory?.label || ''
+      ]);
+    });
+  const csv = rows.map(row => row.map(csvEscape).join(';')).join('\n');
+  downloadText(`kosten-mitarbeiter-${report.month}.csv`, '\ufeff' + csv, 'text/csv;charset=utf-8');
+  toast('Kosten-CSV exportiert.', 'success');
+}
+
 
 const ROUTES = {
   '': renderDashboard,
@@ -1755,6 +2065,25 @@ function renderDashboard() {
   const lastMovements = [...state.movements].sort((a,b) => (b.occurredAt+b.id).localeCompare(a.occurredAt+a.id)).slice(0,10);
 
   const activeArticles = state.articles.filter(a => a.active !== false).length;
+  const costMonth = selectedCostMonth();
+  const costReport = buildEmployeeCostReport(costMonth);
+  const costMonths = availableCostMonths();
+  const maxMonthlyCost = Math.max(...costReport.monthlyTotals.map(row => row.cost), 0);
+  const renderBarRows = (rows, valueKey='cost') => {
+    const max = Math.max(...rows.map(row => row[valueKey] || 0), 0);
+    if (max <= 0) return '<div class="empty" style="padding:26px 10px;">Noch keine Kosten im gewählten Zeitraum.</div>';
+    return rows.map(row => {
+      const value = row[valueKey] || 0;
+      const pct = value > 0 ? Math.max(3, Math.round(value / max * 100)) : 0;
+      return `
+        <div class="bar-row">
+          <div class="bar-label" title="${escapeHtml(row.label || fmtMonth(row.month))}">${escapeHtml(row.label || fmtMonth(row.month))}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="bar-value">${fmtMoney(value)}</div>
+        </div>
+      `;
+    }).join('');
+  };
   const kpiCard = (icon, colorClass, label, val, hint) => `
     <div class="kpi">
       <div class="kpi-icon ${colorClass}">${icon}</div>
@@ -1779,6 +2108,12 @@ function renderDashboard() {
       ${kpiCard('📦', 'blue',
         'Aktive Artikel', activeArticles,
         state.employees.filter(e=>e.active!==false).length + ' Mitarbeiter · ' + state.suppliers.length + ' Lieferanten')}
+      ${kpiCard('€', costReport.monthTotal ? 'blue' : 'green',
+        'Kosten ' + fmtMonth(costMonth), fmtMoney(costReport.monthTotal),
+        costReport.monthQty + ' Teile · ' + costReport.monthCount + ' Buchungen')}
+      ${kpiCard('👤', costReport.topEmployee ? 'yellow' : 'green',
+        'Höchster Mitarbeiterwert', costReport.topEmployee ? fmtMoney(costReport.topEmployee.monthCost) : '—',
+        costReport.topEmployee ? escapeHtml(employeeDisplayName(costReport.topEmployee.employee)) : 'Keine Ausgaben im Monat')}
     </div>
 
     <div class="row">
@@ -1818,6 +2153,92 @@ function renderDashboard() {
               `).join('')}
             </tbody>
           </table>`}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-head">
+        <div>
+          <h2>💶 Kosten-Auswertung</h2>
+          <div class="subtle">Netto-Kosten aus gebuchten Mitarbeiterausgaben. Wareneingänge erhöhen nur den Bestand und zählen hier erst, wenn Artikel an Mitarbeiter ausgegeben werden.</div>
+        </div>
+        <div class="toolbar" style="margin:0;">
+          <select id="dashCostMonth" style="max-width:210px;" onchange="setCostReportMonth(this.value)">
+            ${costMonths.map(month => `<option value="${month}" ${month === costMonth ? 'selected' : ''}>${fmtMonth(month)}</option>`).join('')}
+          </select>
+          <button class="sec small" onclick="exportEmployeeCostCsv('${costMonth}')">CSV exportieren</button>
+        </div>
+      </div>
+
+      <div class="report-grid">
+        <div class="report-metric">
+          <div class="label">Monat netto</div>
+          <div class="value">${fmtMoney(costReport.monthTotal)}</div>
+          <div class="hint">${fmtMonth(costMonth)} · ${costReport.monthQty} Teile</div>
+        </div>
+        <div class="report-metric">
+          <div class="label">Jahr ${escapeHtml(costReport.year)}</div>
+          <div class="value">${fmtMoney(costReport.ytdTotal)}</div>
+          <div class="hint">${costReport.ytdQty} Teile · ${costReport.ytdCount} Buchungen</div>
+        </div>
+        <div class="report-metric">
+          <div class="label">Ø pro aktiven MA</div>
+          <div class="value">${fmtMoney(costReport.avgPerActive)}</div>
+          <div class="hint">${costReport.activeEmployeeCount || 0} aktive Mitarbeiter</div>
+        </div>
+        <div class="report-metric">
+          <div class="label">Preisprüfung</div>
+          <div class="value">${costReport.missingPriceCount}</div>
+          <div class="hint">${costReport.missingPriceCount ? 'Ausgaben ohne EK-Preis prüfen' : 'Alle Ausgaben bewertet'}</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="mini-panel scroll-x" style="flex:2; min-width:520px;">
+          <h3>Kosten pro Mitarbeiter</h3>
+          <table>
+            <thead><tr><th>Mitarbeiter</th><th>Kostenstelle</th><th class="num">Monat</th><th class="num">Jahr</th><th class="num">Teile</th><th>Top Kategorie</th><th></th></tr></thead>
+            <tbody>
+              ${costReport.byEmployee.filter(row => row.monthCost > 0 || row.ytdCost > 0 || row.monthCount > 0).slice(0,10).length === 0
+                ? '<tr><td colspan="7"><div class="empty" style="padding:28px 10px;">Noch keine Mitarbeiterausgaben gebucht. Sobald Artikel über „Neue Ausgabe" ausgegeben werden, entstehen hier Kosten.</div></td></tr>'
+                : costReport.byEmployee.filter(row => row.monthCost > 0 || row.ytdCost > 0 || row.monthCount > 0).slice(0,10).map(row => `
+                  <tr>
+                    <td><a href="#employee/${row.employee.id}">${escapeHtml(employeeDisplayName(row.employee))}</a><div class="muted">${escapeHtml(row.employee.personnelNo || row.employee.roleTitle || '')}</div></td>
+                    <td>${escapeHtml(employeeCostCenter(row.employee))}<div class="muted">${escapeHtml(row.employee.location || row.employee.department || '')}</div></td>
+                    <td class="num"><strong>${fmtMoney(row.monthCost)}</strong></td>
+                    <td class="num">${fmtMoney(row.ytdCost)}</td>
+                    <td class="num">${row.monthQty}</td>
+                    <td>${escapeHtml(row.topCategory?.label || '—')}</td>
+                    <td><a href="#employee/${row.employee.id}">Details</a></td>
+                  </tr>
+                `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="mini-panel" style="flex:1; min-width:320px;">
+          <h3>12-Monats-Verlauf</h3>
+          ${maxMonthlyCost <= 0 ? '<div class="empty" style="padding:26px 10px;">Noch kein Kostenverlauf.</div>' : costReport.monthlyTotals.map(row => {
+            const pct = row.cost > 0 ? Math.max(3, Math.round(row.cost / maxMonthlyCost * 100)) : 0;
+            return `
+              <div class="bar-row">
+                <div class="bar-label">${escapeHtml(fmtMonth(row.month))}</div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <div class="bar-value">${fmtMoney(row.cost)}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <div class="mini-panel" style="flex:1; min-width:320px;">
+          <h3>Kosten nach Kategorie</h3>
+          ${renderBarRows(costReport.categoryTotals.slice(0,8))}
+        </div>
+        <div class="mini-panel" style="flex:1; min-width:320px;">
+          <h3>Kosten nach Kostenstelle</h3>
+          ${renderBarRows(costReport.costCenterTotals.slice(0,8))}
+        </div>
       </div>
     </div>
 
@@ -2768,10 +3189,10 @@ function renderHistory() {
       .sort((a,b) => (b.occurredAt+String(b.id)).localeCompare(a.occurredAt+String(a.id)));
     $('#hTable').innerHTML = `
       <thead>
-        <tr><th>Datum</th><th>Typ</th><th>Artikel</th><th>Mitarbeiter</th><th class="num">Menge</th><th>Notiz</th></tr>
+        <tr><th>Datum</th><th>Typ</th><th>Artikel</th><th>Mitarbeiter</th><th class="num">Menge</th><th>Kosten</th><th>Notiz</th></tr>
       </thead>
       <tbody>
-        ${rows.length === 0 ? '<tr><td colspan="6"><div class="empty"><div class="empty-ico">📋</div><div>Keine Bewegungen</div></div></td></tr>' : rows.map(m => {
+        ${rows.length === 0 ? '<tr><td colspan="7"><div class="empty"><div class="empty-ico">📋</div><div>Keine Bewegungen</div></div></td></tr>' : rows.map(m => {
           const art = state.articles.find(a => a.id === m.articleId);
           const emp = state.employees.find(e => e.id === m.employeeId);
           const typePill = { eingang:'green', ausgabe:'blue', rueckgabe:'gray', defekt:'red', korrektur:'yellow' }[m.type];
@@ -2781,6 +3202,7 @@ function renderHistory() {
             <td>${art ? `<a href="#article/${art.id}">${escapeHtml(art.internalName)}</a>${art.size?' · '+escapeHtml(art.size):''}` : '—'}</td>
             <td>${emp ? `<a href="#employee/${emp.id}">${escapeHtml(emp.lastName+', '+emp.firstName)}</a>` : '—'}</td>
             <td class="num">${m.quantity > 0 ? '+'+m.quantity : m.quantity}</td>
+            <td>${m.type === 'ausgabe' ? fmtMoney(movementCost(m)) : '—'}</td>
             <td>${escapeHtml(m.note || '')}</td>
           </tr>`;
         }).join('')}
@@ -2794,9 +3216,11 @@ function renderHistory() {
 /* ---------- Mitarbeiter ---------- */
 function renderEmployees() {
   const v = $('#view');
+  const costReport = buildEmployeeCostReport(selectedCostMonth());
+  const costByEmployee = new Map(costReport.byEmployee.map(row => [row.employee.id, row]));
   v.innerHTML = `
     <div class="toolbar">
-      <input type="search" id="eSearch" placeholder="Suche …" style="max-width:280px;">
+      <input type="search" id="eSearch" placeholder="Suche Name, Kostenstelle, Standort …" style="max-width:340px;">
       <div class="spacer"></div>
       <button onclick="editEmployee()">+ Neuer Mitarbeiter</button>
     </div>
@@ -2806,21 +3230,25 @@ function renderEmployees() {
     const q = $('#eSearch').value.toLowerCase();
     const rows = state.employees
       .filter(e => e.active !== false)
-      .filter(e => !q || (e.firstName + ' ' + e.lastName + ' ' + (e.personnelNo||'') + ' ' + (e.department||'')).toLowerCase().includes(q))
+      .filter(e => !q || (e.firstName + ' ' + e.lastName + ' ' + (e.personnelNo||'') + ' ' + (e.department||'') + ' ' + (e.costCenter||'') + ' ' + (e.roleTitle||'') + ' ' + (e.location||'')).toLowerCase().includes(q))
       .sort((a,b) => a.lastName.localeCompare(b.lastName));
     $('#eTable').innerHTML = `
-      <thead><tr><th>Name</th><th>Pers.-Nr.</th><th>Abteilung</th><th>Konfektion</th><th>Schuhe</th><th>Aktionen</th></tr></thead>
+      <thead><tr><th>Name</th><th>Pers.-Nr.</th><th>Abteilung / Kostenstelle</th><th>Funktion / Standort</th><th>Größen</th><th class="num">Kosten Monat</th><th class="num">Kosten Jahr</th><th>Aktionen</th></tr></thead>
       <tbody>
-        ${rows.length === 0 ? '<tr><td colspan="6"><div class="empty"><div class="empty-ico">👤</div><div>Keine Mitarbeiter</div></div></td></tr>' : rows.map(e => `
+        ${rows.length === 0 ? '<tr><td colspan="8"><div class="empty"><div class="empty-ico">👤</div><div>Keine Mitarbeiter</div></div></td></tr>' : rows.map(e => {
+          const costs = costByEmployee.get(e.id) || { monthCost: 0, ytdCost: 0 };
+          return `
           <tr>
             <td><a href="#employee/${e.id}">${escapeHtml(e.lastName + ', ' + e.firstName)}</a></td>
             <td>${escapeHtml(e.personnelNo || '—')}</td>
-            <td>${escapeHtml(e.department || '—')}</td>
-            <td>${escapeHtml(e.clothingSize || '—')}</td>
-            <td>${escapeHtml(e.shoeSize || '—')}</td>
+            <td>${escapeHtml(e.department || '—')}<div class="muted">${escapeHtml(e.costCenter || 'Keine Kostenstelle')}</div></td>
+            <td>${escapeHtml(e.roleTitle || '—')}<div class="muted">${escapeHtml(e.location || 'Kein Standort')}</div></td>
+            <td>Konf. ${escapeHtml(e.clothingSize || '—')}<div class="muted">Schuhe ${escapeHtml(e.shoeSize || '—')}</div></td>
+            <td class="num">${fmtMoney(costs.monthCost)}</td>
+            <td class="num">${fmtMoney(costs.ytdCost)}</td>
             <td><button class="ghost small" onclick="editEmployee(${e.id})">bearbeiten</button></td>
           </tr>
-        `).join('')}
+        `; }).join('')}
       </tbody>
     `;
   };
@@ -2830,7 +3258,7 @@ function renderEmployees() {
 
 function editEmployee(id) {
   if (!requirePermission('write', 'Nur Office & Admin dürfen Mitarbeiter bearbeiten.')) return;
-  const emp = id ? state.employees.find(e => e.id === id) : { firstName:'', lastName:'', personnelNo:'', department:'', clothingSize:'', shoeSize:'' };
+  const emp = id ? state.employees.find(e => e.id === id) : { firstName:'', lastName:'', personnelNo:'', department:'', costCenter:'', roleTitle:'', location:'', startDate:'', clothingSize:'', shoeSize:'', notes:'' };
   if (!emp) return;
   const div = document.createElement('div');
   div.innerHTML = `
@@ -2839,9 +3267,14 @@ function editEmployee(id) {
       <div class="field"><label>Nachname</label><input id="ln" value="${escapeHtml(emp.lastName)}"></div>
       <div class="field"><label>Personalnummer</label><input id="pn" value="${escapeHtml(emp.personnelNo||'')}"></div>
       <div class="field"><label>Abteilung</label><input id="dp" value="${escapeHtml(emp.department||'')}"></div>
+      <div class="field"><label>Kostenstelle</label><input id="cc" value="${escapeHtml(emp.costCenter||'')}" placeholder="z. B. Produktion, Lager, Verwaltung"></div>
+      <div class="field"><label>Funktion</label><input id="rt" value="${escapeHtml(emp.roleTitle||'')}" placeholder="z. B. Schweißer, Fahrer, Büro"></div>
+      <div class="field"><label>Standort</label><input id="loc" value="${escapeHtml(emp.location||'')}" placeholder="z. B. Halle 1, Außenlager"></div>
+      <div class="field"><label>Eintritt</label><input id="sd" type="date" value="${escapeHtml(emp.startDate||'')}"></div>
       <div class="field"><label>Konfektionsgröße</label><input id="cs" value="${escapeHtml(emp.clothingSize||'')}"></div>
       <div class="field"><label>Schuhgröße</label><input id="ss" value="${escapeHtml(emp.shoeSize||'')}"></div>
     </div>
+    <div class="field"><label>Notizen / Besonderheiten</label><textarea id="en" rows="3" placeholder="z. B. feste PSA-Ausstattung, Größenhinweise, Kostenhinweise">${escapeHtml(emp.notes||'')}</textarea></div>
   `;
   modal({
     title: id ? 'Mitarbeiter bearbeiten' : 'Neuer Mitarbeiter',
@@ -2857,8 +3290,13 @@ function editEmployee(id) {
       lastName: div.querySelector('#ln').value.trim(),
       personnelNo: div.querySelector('#pn').value.trim() || null,
       department: div.querySelector('#dp').value.trim() || null,
+      costCenter: div.querySelector('#cc').value.trim() || null,
+      roleTitle: div.querySelector('#rt').value.trim() || null,
+      location: div.querySelector('#loc').value.trim() || null,
+      startDate: div.querySelector('#sd').value || null,
       clothingSize: div.querySelector('#cs').value.trim() || null,
       shoeSize: div.querySelector('#ss').value.trim() || null,
+      notes: div.querySelector('#en').value.trim() || null,
       active: true
     };
     if (!data.firstName || !data.lastName) { toast('Vor- und Nachname sind Pflicht.', 'error'); return; }
@@ -2876,6 +3314,19 @@ function renderEmployeeDetail(idStr) {
   if (!emp) { $('#view').innerHTML = '<div class="empty">Mitarbeiter nicht gefunden.</div>'; return; }
   const movs = state.movements.filter(m => m.employeeId === id).sort((a,b) => (b.occurredAt+String(b.id)).localeCompare(a.occurredAt+String(a.id)));
   const openAssign = state.assignments.filter(a => a.employeeId === id && !a.returnedAt);
+  const costMonth = selectedCostMonth();
+  const employeeCostRows = costRecords(id);
+  const employeeMonthRows = employeeCostRows.filter(row => row.month === costMonth);
+  const employeeYtdRows = employeeCostRows.filter(row => String(row.date || '').startsWith(costMonth.slice(0,4) + '-'));
+  const employeeMonthSummary = summarizeCostRows(employeeMonthRows);
+  const employeeYtdSummary = summarizeCostRows(employeeYtdRows);
+  const employeeTotalSummary = summarizeCostRows(employeeCostRows);
+  const employeeCategoryTotals = aggregateCostRows(employeeMonthRows, row => row.categoryLabel);
+  const employeeMonthlyTotals = Array.from({ length: 12 }, (_, index) => {
+    const month = shiftMonthKey(costMonth, index - 11);
+    return { month, ...summarizeCostRows(employeeCostRows.filter(row => row.month === month)) };
+  });
+  const maxEmployeeMonthlyCost = Math.max(...employeeMonthlyTotals.map(row => row.cost), 0);
   const v = $('#view');
   v.innerHTML = `
     <div class="card">
@@ -2883,9 +3334,14 @@ function renderEmployeeDetail(idStr) {
         <div><label>Name</label><div><strong>${escapeHtml(emp.lastName + ', ' + emp.firstName)}</strong></div></div>
         <div><label>Personalnummer</label><div>${escapeHtml(emp.personnelNo || '—')}</div></div>
         <div><label>Abteilung</label><div>${escapeHtml(emp.department || '—')}</div></div>
+        <div><label>Kostenstelle</label><div>${escapeHtml(employeeCostCenter(emp))}</div></div>
+        <div><label>Funktion</label><div>${escapeHtml(emp.roleTitle || '—')}</div></div>
+        <div><label>Standort</label><div>${escapeHtml(emp.location || '—')}</div></div>
+        <div><label>Eintritt</label><div>${fmtDate(emp.startDate)}</div></div>
         <div><label>Konfektion</label><div>${escapeHtml(emp.clothingSize || '—')}</div></div>
         <div><label>Schuhgröße</label><div>${escapeHtml(emp.shoeSize || '—')}</div></div>
       </div>
+      ${emp.notes ? `<div style="margin-top:12px; padding-top:12px; border-top:1px solid #e2e8f0;"><label>Notizen</label><div class="subtle">${escapeHtml(emp.notes)}</div></div>` : ''}
       <div class="actions" style="margin-top:10px;">
         <button class="sec" onclick="editEmployee(${emp.id})">Bearbeiten</button>
         <a class="btn" href="#issue">Neue Ausgabe</a>
@@ -2893,17 +3349,85 @@ function renderEmployeeDetail(idStr) {
     </div>
 
     <div class="card" style="margin-top:14px;">
+      <div class="card-head">
+        <div>
+          <h2>Kostenprofil</h2>
+          <div class="subtle">Bewertet werden nur gebuchte Ausgaben an diesen Mitarbeiter.</div>
+        </div>
+        <select style="max-width:210px;" onchange="setCostReportMonth(this.value)">
+          ${availableCostMonths().map(month => `<option value="${month}" ${month === costMonth ? 'selected' : ''}>${fmtMonth(month)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="report-grid">
+        <div class="report-metric">
+          <div class="label">Monat netto</div>
+          <div class="value">${fmtMoney(employeeMonthSummary.cost)}</div>
+          <div class="hint">${fmtMonth(costMonth)} · ${employeeMonthSummary.quantity} Teile</div>
+        </div>
+        <div class="report-metric">
+          <div class="label">Jahr ${escapeHtml(costMonth.slice(0,4))}</div>
+          <div class="value">${fmtMoney(employeeYtdSummary.cost)}</div>
+          <div class="hint">${employeeYtdSummary.count} Buchungen</div>
+        </div>
+        <div class="report-metric">
+          <div class="label">Gesamt</div>
+          <div class="value">${fmtMoney(employeeTotalSummary.cost)}</div>
+          <div class="hint">${employeeTotalSummary.quantity} Teile seit Start</div>
+        </div>
+        <div class="report-metric">
+          <div class="label">Preisprüfung</div>
+          <div class="value">${employeeMonthSummary.missingPriceCount}</div>
+          <div class="hint">${employeeMonthSummary.missingPriceCount ? 'EK-Preis fehlt bei Ausgabe' : 'Monat vollständig bewertet'}</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="mini-panel" style="flex:1; min-width:320px;">
+          <h3>12-Monats-Verlauf</h3>
+          ${maxEmployeeMonthlyCost <= 0 ? '<div class="empty" style="padding:26px 10px;">Noch kein Kostenverlauf.</div>' : employeeMonthlyTotals.map(row => {
+            const pct = row.cost > 0 ? Math.max(3, Math.round(row.cost / maxEmployeeMonthlyCost * 100)) : 0;
+            return `
+              <div class="bar-row">
+                <div class="bar-label">${escapeHtml(fmtMonth(row.month))}</div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <div class="bar-value">${fmtMoney(row.cost)}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="mini-panel" style="flex:1; min-width:320px;">
+          <h3>Kategorien im Monat</h3>
+          ${employeeCategoryTotals.length === 0 ? '<div class="empty" style="padding:26px 10px;">Keine Ausgaben im gewählten Monat.</div>' : employeeCategoryTotals.map(row => {
+            const max = Math.max(...employeeCategoryTotals.map(item => item.cost), 1);
+            const pct = Math.max(3, Math.round(row.cost / max * 100));
+            return `
+              <div class="bar-row">
+                <div class="bar-label">${escapeHtml(row.label)}</div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <div class="bar-value">${fmtMoney(row.cost)}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
       <h2>Aktuell ausgegeben (offene Zuordnungen)</h2>
       ${openAssign.length === 0 ? '<div class="empty">Keine offenen Zuordnungen.</div>' : `
         <table>
-          <thead><tr><th>Artikel</th><th>Menge</th><th>Ausgegeben am</th><th></th></tr></thead>
+          <thead><tr><th>Artikel</th><th>Menge</th><th>Ausgegeben am</th><th>EK</th><th>Wert</th><th></th></tr></thead>
           <tbody>
             ${openAssign.map(a => {
               const art = state.articles.find(x => x.id === a.articleId);
+              const issueMovement = state.movements.find(m => m.id === a.issueMovementId);
+              const unitPrice = issueMovement ? movementUnitPrice(issueMovement) : (art?.lastPurchasePrice ?? null);
+              const boundValue = unitPrice == null ? null : Math.abs(Number(a.quantity) || 0) * unitPrice;
               return `<tr>
                 <td>${art ? escapeHtml(art.internalName) : '—'}${art && art.size ? ' · '+art.size : ''}</td>
                 <td>${a.quantity}</td>
                 <td>${fmtDate(a.issuedAt)}</td>
+                <td>${fmtMoney(unitPrice)}</td>
+                <td>${fmtMoney(boundValue)}</td>
                 <td><button class="sec small" onclick="returnAssignment(${a.id})">Rückgabe buchen</button></td>
               </tr>`;
             }).join('')}
@@ -2916,7 +3440,7 @@ function renderEmployeeDetail(idStr) {
       <h2>Bewegungshistorie (${movs.length})</h2>
       ${movs.length === 0 ? '<div class="empty">Noch keine Bewegungen.</div>' : `
         <table>
-          <thead><tr><th>Datum</th><th>Typ</th><th>Artikel</th><th class="num">Menge</th><th>Notiz</th></tr></thead>
+          <thead><tr><th>Datum</th><th>Typ</th><th>Artikel</th><th class="num">Menge</th><th>EK</th><th>Kosten</th><th>Notiz</th></tr></thead>
           <tbody>
             ${movs.map(m => {
               const art = state.articles.find(a => a.id === m.articleId);
@@ -2926,6 +3450,8 @@ function renderEmployeeDetail(idStr) {
                 <td><span class="pill ${typePill}">${MOVEMENT_TYPES[m.type]}</span></td>
                 <td>${art ? escapeHtml(art.internalName) : '—'}${art && art.size ? ' · '+art.size:''}</td>
                 <td class="num">${m.quantity > 0 ? '+'+m.quantity : m.quantity}</td>
+                <td>${fmtMoney(movementUnitPrice(m))}</td>
+                <td>${m.type === 'ausgabe' ? fmtMoney(movementCost(m)) : '—'}</td>
                 <td>${escapeHtml(m.note||'')}</td>
               </tr>`;
             }).join('')}
